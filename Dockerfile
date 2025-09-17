@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.11
 
 # WHY: Set working directory inside container
 # WHAT: All subsequent commands run from this directory
