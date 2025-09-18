@@ -25,7 +25,11 @@ import json
 # WHY: Define the base URL where our API server is running
 # WHAT: This is the address our CLI will send HTTP requests to
 # WHY: localhost:8000 is the default FastAPI development server address
-API_BASE_URL = "http://localhost:8000"
+# API_BASE_URL = "http://localhost:8000"
+import os
+API_BASE_URL = os.getenv("API_BASE_URL", "https://ai-research-assistant-production-1ef8.up.railway.app")
+
+# WHY: Define a function to check if the API server is reachable
 
 def check_api_health():
     """
