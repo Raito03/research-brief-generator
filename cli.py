@@ -208,13 +208,32 @@ def generate_brief_interactive():
     # WHAT: Any input starting with 'y' is treated as yes, everything else as no
     follow_up = follow_up_input.startswith('y')
     
+    # WHY: Add interactive prompt for summary length
+    # WHAT: Guides users through length selection
+    while True:
+        length_input = input("📏 Enter desired summary length in words (50-2000, default 300): ").strip()
+        
+        if not length_input:
+            summary_length = 300  # WHY: Default for empty input
+            break
+        
+        try:
+            summary_length = int(length_input)
+            if 50 <= summary_length <= 2000:
+                break
+            else:
+                print("❌ Length must be between 50 and 2000 words. Please try again.")
+        except ValueError:
+            print("❌ Please enter a valid number.")
+
     # WHY: Return all collected inputs as a dictionary
     # WHAT: This data structure matches what our API expects
     return {
         "topic": topic,
         "depth": depth,
         "user_id": user_id,
-        "follow_up": follow_up
+        "follow_up": follow_up,
+        "summary_length": summary_length  # ← NEW: Include length in request
     }
 
 def main():
@@ -267,6 +286,16 @@ def main():
         '--follow-up', 
         action='store_true',
         help='Indicate this is a follow-up to previous research'
+    )
+
+    # WHY: Add summary length argument with validation
+    # WHAT: Allows users to customize output length from command line
+    parser.add_argument(
+        '--length', 
+        type=int, 
+        default=300,
+        choices=range(50, 2001),  # WHY: Validate range 50-2000 words
+        help='Summary length in words (50-2000, default: 300)'
     )
     
     # WHY: Add --interactive flag for interactive mode

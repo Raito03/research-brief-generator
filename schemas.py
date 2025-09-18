@@ -60,10 +60,19 @@ class ContextSummary(BaseModel):
 
 class FinalBrief(BaseModel):
     """Schema for the complete research brief - YOUR ASSIGNMENT OUTPUT"""
-    topic: str
-    depth: int = Field(..., ge=1, le=5)
-    user_id: str
-    follow_up: bool
+    topic: str = Field(..., min_length=5, description="Research topic to investigate")
+    depth: int = Field(..., ge=1, le=5, description="Research depth (1=basic, 5=comprehensive)")
+    user_id: str = Field(..., min_length=1, description="Unique identifier for the user")
+    follow_up: bool = Field(default=False, description="Is this a follow-up to previous research?")
+    
+    # WHY: Add summary_length as optional parameter with validation
+    # WHAT: Allows users to control summary length, defaults to 300 words for existing users
+    summary_length: Optional[int] = Field(
+        default=300,                    # WHY: Reasonable default for most use cases
+        ge=50,                         # WHY: Minimum 50 words for meaningful summaries
+        le=2000,                       # WHY: Maximum 2000 words to prevent excessive output
+        description="Desired summary length in words (50-2000, default: 300)"
+    )
     
     # Research content
     executive_summary: str = Field(..., min_length=100, max_length=300)

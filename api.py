@@ -121,6 +121,7 @@ async def generate_brief(request: BriefRequest, background_tasks: BackgroundTask
     print(f"🎯 API: Starting brief generation for topic: '{request.topic}'")
     print(f"📊 Request ID: {brief_id}")
     print(f"👤 User: {request.user_id}")
+    print(f"📏 Summary Length: {request.summary_length} words")
     print(f"🔍 Depth: {request.depth}/5")
     
     try:
@@ -135,6 +136,7 @@ async def generate_brief(request: BriefRequest, background_tasks: BackgroundTask
             "depth": request.depth,
             "user_id": request.user_id,
             "follow_up": request.follow_up,
+            "summary_length": request.summary_length,
             "research_plan": None,
             "raw_search_results": None,
             "source_summaries": None,

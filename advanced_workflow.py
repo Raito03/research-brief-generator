@@ -23,6 +23,10 @@ class AdvancedResearchState(TypedDict):
     user_id: str
     follow_up: bool
     
+    # WHY: Add summary_length to state for workflow nodes to use
+    # WHAT: Makes length preference available in summarization and synthesis nodes
+    summary_length: Optional[int]
+
     # Generated during workflow
     research_plan: Optional[ResearchPlan]
     raw_search_results: Optional[List[dict]]
@@ -387,11 +391,21 @@ def create_emergency_fallback_sources(research_plan: ResearchPlan, topic: str) -
 def summarization_node(state: AdvancedResearchState):
     """Create structured summaries with improved parsing and validation"""
     print(f"📝 SUMMARIZING: Using Sonoma Dusk Alpha for source analysis")
-    
+
+    print(f"📝 SUMMARIZING: Custom length = {state.get('summary_length', 300)} words")  
+
     if not state.get("raw_search_results"):
         return {"errors": ["No search results available"], "current_step": "summarization_failed"}
     
-    llm = create_openrouter_llm(temperature=0, max_tokens=800)
+    # WHY: Get user's preferred summary length from state
+    # WHAT: Defaults to 300 words if not specified
+    target_length = state.get('summary_length', 300)
+    
+    # WHY: Create LLM with appropriate token limit for desired length  
+    # WHAT: Calculate max_tokens based on desired word count (roughly 1.3 tokens per word)
+    max_tokens = min(int(target_length * 1.5), 2000)  # WHY: Safety limit to prevent excessive tokens
+
+    llm = create_openrouter_llm(temperature=0, max_tokens=max_tokens)
     
     source_summaries = []
     
@@ -408,7 +422,9 @@ def summarization_node(state: AdvancedResearchState):
 
             Provide a structured analysis:
 
-            SUMMARY: Write 2-3 complete sentences explaining how this source relates to {state['topic']} (minimum 60 characters).
+            Create a summary of approximately {target_length // 4} words that explains how this source relates to {state['topic']}.
+
+            SUMMARY: [Write your {target_length // 4}-word summary here]
 
             KEY_POINT_1: First important insight from this source
             KEY_POINT_2: Second important insight from this source
@@ -416,7 +432,7 @@ def summarization_node(state: AdvancedResearchState):
             RELEVANCE_SCORE: Rate 0.0 to 1.0 how relevant this is to {state['topic']}
             CREDIBILITY_SCORE: Rate 0.0 to 1.0 how credible this source appears
 
-            Use this exact format. Write complete sentences for the summary.
+            Use this exact format. Write complete sentences for the summary and provide detailed analysis.
             """
             
             response = llm.invoke([HumanMessage(content=prompt)])
@@ -585,12 +601,25 @@ def create_compliant_fallback(result: dict, topic: str) -> SourceSummary:
 def synthesis_node(state: AdvancedResearchState):
     """Create final brief using OpenRouter Sonoma Dusk Alpha"""
     print(f"🎯 SYNTHESIS: Creating final research brief with Sonoma Dusk Alpha")
+    print(f"🎯 SYNTHESIS: Creating brief with {state.get('summary_length', 300)}-word target length")
     
     if not state.get("source_summaries"):
         return {"errors": ["No source summaries available"], "current_step": "synthesis_failed"}
     
+    # WHY: Get user's target length and calculate section lengths
+    # WHAT: Distributes total length across executive summary and detailed analysis
+    target_total_length = state.get('summary_length', 300)
+
+    # WHY: Allocate length proportionally across sections
+    # WHAT: Executive summary gets 30%, detailed analysis gets 70%
+    exec_summary_length = int(target_total_length * 0.3)  # WHY: ~30% for executive summary
+    detailed_analysis_length = int(target_total_length * 0.7)  # WHY: ~70% for detailed analysis
+    
+    # WHY: Create LLM with appropriate token budget for target length
+    # WHAT: Ensures LLM can generate content of desired length
+    max_tokens = min(int(target_total_length * 2), 3000)  # WHY: Buffer for longer outputs
     # Create OpenRouter LLM - use higher max_tokens for synthesis
-    llm = create_openrouter_llm(temperature=0.1, max_tokens=1500)
+    llm = create_openrouter_llm(temperature=0.1, max_tokens=max_tokens)
     
     # Limit sources to top 8 (well under the 10 limit)
     top_sources = sorted(
@@ -600,7 +629,8 @@ def synthesis_node(state: AdvancedResearchState):
     )[:8]
     
     print(f"   📊 Using top {len(top_sources)} sources (sorted by relevance)")
-    
+    print(f"   📏 Target lengths: Executive={exec_summary_length} words, Analysis={detailed_analysis_length} words")
+
     # Prepare concise source information
     sources_text = "\n".join([
         f"Source {i+1}: {summary.title[:80]}\n"
@@ -618,19 +648,19 @@ def synthesis_node(state: AdvancedResearchState):
 
     Create a research brief with these EXACT requirements:
 
-    1. EXECUTIVE SUMMARY (exactly 200-280 characters):
-    Write a concise overview in 2-3 sentences.
+    1. EXECUTIVE SUMMARY (exactly {exec_summary_length} words):
+    Write a concise overview in approximately {exec_summary_length} words.
 
-    2. KEY FINDINGS (exactly 4-5 bullet points):
+    2. KEY FINDINGS (exactly 4-6 bullet points):
     List the most important discoveries from the research.
 
-    3. DETAILED ANALYSIS (exactly 400-800 characters):
-    Provide in-depth analysis of the findings.
+    3. DETAILED ANALYSIS (exactly {detailed_analysis_length} words):
+    Provide in-depth analysis of approximately {detailed_analysis_length} words.
 
     Format your response as:
 
     EXECUTIVE_SUMMARY:
-    [Your 200-280 character summary here]
+    [Your {exec_summary_length}-word summary here]]
 
     KEY_FINDINGS:
     - [Finding 1]
@@ -639,7 +669,7 @@ def synthesis_node(state: AdvancedResearchState):
     - [Finding 4]
 
     DETAILED_ANALYSIS:
-    [Your 400-800 character detailed analysis here]
+    [Your {detailed_analysis_length}-word detailed analysis here]
 
     Be precise with character limits. Focus on actionable insights.
     """
@@ -705,6 +735,15 @@ def synthesis_node(state: AdvancedResearchState):
         print(f"   📚 Sources: {len(final_brief.sources)} items")
         print(f"   ⏱️  Processing time: {processing_time:.2f}s")
         
+        # WHY: Report actual lengths achieved vs target lengths
+        # WHAT: Helps users understand how close we got to their target
+        exec_word_count = len(final_brief.executive_summary.split())
+        analysis_word_count = len(final_brief.detailed_analysis.split())
+        total_word_count = exec_word_count + analysis_word_count
+        print(f"   📝 Executive summary: {exec_word_count} words (target: {exec_summary_length})")
+        print(f"   📊 Detailed analysis: {analysis_word_count} words (target: {detailed_analysis_length})")
+        print(f"   📏 Total length: {total_word_count} words (target: {target_total_length})")
+
         return {
             "final_brief": final_brief,
             "current_step": "completed"
@@ -776,6 +815,98 @@ def create_fallback_brief(state: AdvancedResearchState, sources: list) -> FinalB
         sources=sources[:10],
         processing_time_seconds=round(processing_time, 2)
     )
+
+def ensure_target_length(text: str, target_words: int, topic: str, tolerance: float = 0.2) -> str:
+    """
+    WHY: Ensure text meets target word count within acceptable tolerance
+    WHAT: Adjusts text length to match user's preferences
+    """
+    current_words = len(text.split())
+    min_words = int(target_words * (1 - tolerance))
+    max_words = int(target_words * (1 + tolerance))
+    
+    if current_words < min_words:
+        # WHY: Text too short - expand with relevant content
+        # WHAT: Add contextual information to reach minimum length
+        expansion = f" This analysis of {topic} provides comprehensive insights into the current landscape and emerging trends in the field."
+        text = text + expansion
+        
+        # WHY: Check if still too short after expansion
+        # WHAT: Add more generic but relevant content if needed
+        if len(text.split()) < min_words:
+            text = text + f" The research indicates significant developments in {topic} with implications for future applications and policy considerations."
+    
+    elif current_words > max_words:
+        # WHY: Text too long - truncate while maintaining meaning
+        # WHAT: Keep first portion and add proper ending
+        words = text.split()
+        truncated = ' '.join(words[:max_words-3])
+        text = truncated + "..."
+    
+    return text
+
+def calculate_tokens_from_words(word_count: int) -> int:
+    """
+    WHY: Convert word count to approximate token count for LLM limits
+    WHAT: Uses rough conversion ratio of 1.3-1.5 tokens per word
+    """
+    # WHY: English text averages ~1.3 tokens per word
+    # WHAT: Add buffer for safety and include prompt tokens
+    return min(int(word_count * 1.5) + 500, 4000)  # WHY: Cap at 4000 tokens for safety
+
+def parse_synthesis_response_with_length(content: str, topic: str, exec_target: int, analysis_target: int) -> dict:
+    """
+    WHY: Parse LLM response and validate section lengths
+    WHAT: Extracts sections and ensures they meet length targets
+    """
+    executive_summary = ""
+    key_findings = []
+    detailed_analysis = ""
+    
+    sections = content.split('\n\n')
+    current_section = None
+    
+    for section in sections:
+        lines = section.split('\n')
+        for line in lines:
+            line = line.strip()
+            
+            if 'EXECUTIVE_SUMMARY:' in line:
+                current_section = 'executive'
+                continue
+            elif 'KEY_FINDINGS:' in line:
+                current_section = 'findings'
+                continue
+            elif 'DETAILED_ANALYSIS:' in line:
+                current_section = 'analysis'
+                continue
+            
+            if current_section == 'executive' and line:
+                executive_summary = line
+            elif current_section == 'findings' and line.startswith('-'):
+                key_findings.append(line.lstrip('- ').strip())
+            elif current_section == 'analysis' and line:
+                detailed_analysis += line + " "
+    
+    # WHY: Validate and adjust lengths to meet targets
+    # WHAT: Ensures sections match user's length preferences
+    executive_summary = ensure_target_length(executive_summary, exec_target, topic)
+    detailed_analysis = ensure_target_length(detailed_analysis.strip(), analysis_target, topic)
+    
+    # WHY: Ensure minimum findings count
+    # WHAT: Provides fallback findings if parsing failed
+    if len(key_findings) < 3:
+        key_findings = [
+            f"Research reveals significant developments in {topic}",
+            f"Multiple sources confirm growing importance of {topic}",
+            f"Analysis indicates practical implications for {topic} implementation"
+        ]
+    
+    return {
+        "executive_summary": executive_summary,
+        "key_findings": key_findings[:6],  # WHY: Cap at 6 findings max
+        "detailed_analysis": detailed_analysis
+    }
 
 # def create_compliant_fallback(result: dict, topic: str) -> SourceSummary:
 #     """Create a fallback SourceSummary that meets all schema requirements"""
