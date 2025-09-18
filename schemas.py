@@ -58,6 +58,16 @@ class ContextSummary(BaseModel):
     research_preferences: Optional[str] = None
     last_updated: datetime
 
+class BriefRequest(BaseModel):
+    """Request schema for generating research briefs"""
+    topic: str = Field(..., min_length=5, max_length=200, description="Research topic to investigate")
+    depth: int = Field(default=3, ge=1, le=5, description="Research depth (1=basic, 5=comprehensive)")  
+    user_id: str = Field(..., min_length=1, description="Unique identifier for the user")
+    follow_up: bool = Field(default=False, description="Is this a follow-up to previous research?")
+    
+    # ✅ ADD THIS LINE TO FIX THE ERROR:
+    summary_length: Optional[int] = Field(default=300, ge=50, le=2000, description="Summary length in words")
+    
 class FinalBrief(BaseModel):
     """Schema for the complete research brief - YOUR ASSIGNMENT OUTPUT"""
     topic: str = Field(..., min_length=5, description="Research topic to investigate")
@@ -73,7 +83,7 @@ class FinalBrief(BaseModel):
         le=2000,                       # WHY: Maximum 2000 words to prevent excessive output
         description="Desired summary length in words (50-2000, default: 300)"
     )
-    
+
     # Research content
     executive_summary: str = Field(..., min_length=100, max_length=300)
     research_questions: List[str]
