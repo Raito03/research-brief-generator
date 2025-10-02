@@ -1,4 +1,8 @@
 # api.py - This file creates web endpoints that others can call over HTTP
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -7,10 +11,13 @@ import uvicorn
 import time
 import uuid
 from datetime import datetime
+from fastapi.responses import StreamingResponse
+import asyncio
+import json
 
 # Import your existing workflow
-from advanced_workflow import create_advanced_workflow, AdvancedResearchState
-from schemas import FinalBrief
+from app.advanced_workflow import create_advanced_workflow, AdvancedResearchState
+from app.schemas import FinalBrief
 
 # WHY: FastAPI() creates our web application instance
 # WHAT: This is like opening a restaurant - you need a place to serve customers
@@ -43,7 +50,9 @@ class BriefRequest(BaseModel):
     depth: int = Field(default=3, ge=1, le=5, description="Research depth (1=basic, 5=comprehensive)")
     follow_up: bool = Field(default=False, description="Is this a follow-up to previous research?")
     user_id: str = Field(..., min_length=1, description="Unique identifier for the user")
-
+    # 🎯 THIS LINE MUST BE PRESENT:
+    summary_length: Optional[int] = Field(default=300, ge=50, le=2000, description="Desired summary length in words")
+    
 class BriefResponse(BaseModel):
     """
     WHY: This defines what users will receive back from the API
@@ -121,7 +130,8 @@ async def generate_brief(request: BriefRequest, background_tasks: BackgroundTask
     print(f"🎯 API: Starting brief generation for topic: '{request.topic}'")
     print(f"📊 Request ID: {brief_id}")
     print(f"👤 User: {request.user_id}")
-    print(f"📏 Summary Length: {request.summary_length} words")
+    summary_length = getattr(request, 'summary_length', 300)
+    print(f"📏 Summary Length: {summary_length} words")
     print(f"🔍 Depth: {request.depth}/5")
     
     try:
@@ -236,6 +246,118 @@ async def generate_brief(request: BriefRequest, background_tasks: BackgroundTask
             created_at=datetime.now()
         )
 
+async def run_workflow_async(workflow_app, initial_state, log_callback):
+    """Run workflow in async context with logging callback"""
+    try:
+        # Import the streaming functions
+        from app.advanced_workflow import set_log_callback
+        
+        # Set the global log callback
+        set_log_callback(log_callback)
+        
+        # Run workflow (this is sync, so run in thread pool)
+        loop = asyncio.get_event_loop()
+        final_state = await loop.run_in_executor(None, workflow_app.invoke, initial_state)
+        
+        return final_state
+    except Exception as e:
+        raise Exception(f"Workflow execution error: {str(e)}")
+
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles datetime objects"""
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+# Add this new endpoint after your existing endpoints
+@app.post("/brief/stream")
+async def generate_brief_stream(request: BriefRequest):
+    """Generate a research brief with real-time streaming logs"""
+    
+    brief_id = str(uuid.uuid4())
+    start_time = time.time()
+    
+    async def log_generator():
+        try:
+            # Send initial configuration logs
+            yield f"data: {json.dumps({'type': 'log', 'message': f'🚀 Starting research brief generation...'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'🎯 Topic: {request.topic}'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'📏 Summary Length: {request.summary_length} words'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'🔍 Depth: {request.depth}/5'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'👤 User: {request.user_id}'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'🔄 Follow-up: {request.follow_up}'}, cls=DateTimeEncoder)}\n\n"
+            
+            # Create workflow instance
+            workflow_app = create_advanced_workflow()
+            
+            # Prepare initial state
+            initial_state = {
+                "topic": request.topic,
+                "depth": request.depth,
+                "user_id": request.user_id,
+                "follow_up": request.follow_up,
+                "summary_length": request.summary_length,
+                "research_plan": None,
+                "raw_search_results": None,
+                "source_summaries": None,
+                "final_brief": None,
+                "start_time": start_time,
+                "errors": None,
+                "current_step": "starting"
+            }
+            
+            # Create a simple list to store logs (thread-safe for this use case)
+            log_messages = []
+            
+            # Define a callback that adds messages to our list
+            def stream_callback(message: str):
+                log_messages.append(message)
+            
+            # Set the global log callback
+            from app.advanced_workflow import set_log_callback
+            set_log_callback(stream_callback)
+            
+            # Run the workflow in a thread pool (since it's synchronous)
+            import asyncio
+            loop = asyncio.get_event_loop()
+            
+            # Start the workflow execution
+            workflow_task = loop.run_in_executor(None, workflow_app.invoke, initial_state)
+            
+            # Stream logs in real-time while workflow is running
+            last_log_index = 0
+            while not workflow_task.done():
+                # Check for new log messages
+                if last_log_index < len(log_messages):
+                    for i in range(last_log_index, len(log_messages)):
+                        yield f"data: {json.dumps({'type': 'log', 'message': log_messages[i]})}\n\n"
+                    last_log_index = len(log_messages)
+                
+                # Small delay to prevent busy waiting
+                await asyncio.sleep(0.1)
+            
+            # Get the final result
+            final_state = await workflow_task
+            
+            # Send any remaining logs
+            if last_log_index < len(log_messages):
+                for i in range(last_log_index, len(log_messages)):
+                    yield f"data: {json.dumps({'type': 'log', 'message': log_messages[i]})}\n\n"
+            
+            # Send final result
+            if final_state and final_state.get("final_brief"):
+                brief_data = final_state["final_brief"].dict()
+                yield f"data: {json.dumps({'type': 'result', 'data': brief_data}, cls=DateTimeEncoder)}\n\n"
+                yield f"data: {json.dumps({'type': 'complete', 'success': True}, cls=DateTimeEncoder)}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Workflow completed but no brief was generated'}, cls=DateTimeEncoder)}\n\n"
+            
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Streaming error: {str(e)}'}, cls=DateTimeEncoder)}\n\n"
+    
+    return StreamingResponse(log_generator(), media_type="text/event-stream")
+
 @app.get("/status/{brief_id}")
 async def get_brief_status(brief_id: str):
     """
@@ -272,6 +394,36 @@ async def get_active_requests():
         "requests": active_requests
     }
 
+@app.get("/metrics/performance")
+async def get_performance_metrics():
+    """Get comprehensive performance and usage metrics - SAFE VERSION"""
+    try:
+        # Try to import safely
+        try:
+            from future_implementation.langsmith_integration import token_tracker, performance_monitor
+            token_stats = token_tracker.get_current_stats()
+            perf_stats = performance_monitor.get_performance_report()
+            
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "token_usage": token_stats,
+                "performance_metrics": perf_stats,
+                "status": "monitoring_active"
+            }
+        except ImportError:
+            return {
+                "timestamp": datetime.now().isoformat(), 
+                "status": "monitoring_disabled",
+                "message": "LangSmith integration not available"
+            }
+            
+    except Exception as e:
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "status": "error",
+            "message": f"Metrics error: {str(e)}"
+        }
+    
 # WHY: This block only runs when you execute this file directly (not when imported)
 # WHAT: Standard Python pattern for making modules both importable and executable
 if __name__ == "__main__":

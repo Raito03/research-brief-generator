@@ -22,4 +22,4 @@ EXPOSE 8000
 
 # WHY: Define the command to start your application
 # WHAT: Runs uvicorn server when container starts
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]

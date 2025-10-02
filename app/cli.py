@@ -28,6 +28,8 @@ import json
 # API_BASE_URL = "http://localhost:8000"
 import os
 API_BASE_URL = os.getenv("API_BASE_URL", "https://ai-research-assistant-production-1ef8.up.railway.app")
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # WHY: Define a function to check if the API server is reachable
 

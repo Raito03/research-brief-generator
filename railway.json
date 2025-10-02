@@ -3,7 +3,7 @@
       "builder": "Dockerfile"
     },
     "deploy": {
-      "start": "uvicorn api:app --host 0.0.0.0 --port $PORT",
+      "start": "uvicorn app.api:app --host 0.0.0.0 --port $PORT",
       "healthcheck": "/health"
     }
   }
