@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  --chinese-black: #0A1123;
+  --cadet-grey: #959BB5;
+  --american-blue: #3A3E6C;
+  --ube: #8387C3;
+  --cool-grey: #8A8CAC;
+
+  --background: var(--chinese-black);
+  --foreground: var(--cadet-grey);
+  --primary: var(--ube);
+  --secondary: var(--american-blue);
+  --muted: var(--cool-grey);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+
+  --color-chinese-black: var(--chinese-black);
+  --color-cadet-grey: var(--cadet-grey);
+  --color-american-blue: var(--american-blue);
+  --color-ube: var(--ube);
+  --color-cool-grey: var(--cool-grey);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Lexend', 'Helvetica Neue', 'Open Sans', sans-serif;
+  overflow-x: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--chinese-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--american-blue);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ube);
+}
+
+/* Selection color */
+::selection {
+  background: var(--ube);
+  color: var(--chinese-black);
+}
+
+/* Focus visible styles */
+*:focus-visible {
+  outline: 2px solid var(--ube);
+  outline-offset: 2px;
+}
