@@ -123,34 +123,123 @@ def stream_log(message: str):
 
 model_name_global = None
 def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> ChatOpenAI:
-    """Create OpenRouter LLM with streaming capability"""
-    # List of models to try in order
-    models = [
-        ("x-ai/grok-4-fast:free" , "Grok AI"),
-        ("nvidia/nemotron-nano-9b-v2:free", "NVIDIA NeMo"),
-        ("deepseek/deepseek-chat-v3.1:free", "DeepSeek"),
-    ]
+    """
+    Create LLM with multi-provider fallback strategy
+    Priority: Google AI Studio (Gemini) → Cloudflare Workers AI → OpenRouter
+    """
     global model_name_global
-    for model_repo, model_name in models:
+    
+    # Provider configurations with their models
+    providers = [
+        {
+            "name": "Google Gemini",
+            "type": "google",
+            "model": "gemini-2.0-flash-lite",
+            "api_key_env": "GOOGLE_API_KEY"
+        },
+        {
+            "name": "Cloudflare Workers AI", 
+            "type": "cloudflare",
+            "model": "@cf/meta/llama-3.1-8b-instruct",
+            "account_id_env": "CF_ACCOUNT_ID",
+            "api_token_env": "CF_API_TOKEN"
+        },
+        {
+            "name": "OpenRouter (DeepSeek)",
+            "type": "openrouter", 
+            "model": "deepseek/deepseek-chat-v3.1:free",
+            "api_key_env": "OPENROUTER_API_KEY"
+        }
+    ]
+    
+    for provider in providers:
         try:
-            llm = ChatOpenAI(
-                model=model_repo,
-                openai_api_key=os.getenv("OPENROUTER_API_KEY"),
-                openai_api_base="https://openrouter.ai/api/v1",
-                temperature=temperature,
-                max_tokens=max_tokens,
-                default_headers={"HTTP-Referer": "http://localhost:5000", "X-Title": "Research Brief Generator"},
-                streaming=True # Enable streaming
-            )
-            # Optionally test the model here or return immediately if assumed okay
-            
-            model_name_global = model_name
-            return llm
+            if provider["type"] == "google":
+                # Google AI Studio / Gemini
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                
+                api_key = os.getenv(provider["api_key_env"])
+                if not api_key:
+                    stream_log(f"⚠️  {provider['name']}: API key not found, skipping...")
+                    continue
+                    
+                llm = ChatGoogleGenerativeAI(
+                    model=provider["model"],
+                    google_api_key=api_key,
+                    temperature=temperature,
+                    max_output_tokens=max_tokens,
+                    streaming=True
+                )
+                
+                # Test the connection with a simple call
+                test_response = llm.invoke([HumanMessage(content="test")])
+                
+                model_name_global = provider["name"]
+                stream_log(f"✅ Successfully connected to {provider['name']} ({provider['model']})")
+                return llm
+                
+            elif provider["type"] == "cloudflare":
+                # Cloudflare Workers AI
+                from langchain_community.chat_models import ChatCloudflareWorkersAI
+                
+                account_id = os.getenv(provider["account_id_env"])
+                api_token = os.getenv(provider["api_token_env"])
+                
+                if not account_id or not api_token:
+                    stream_log(f"⚠️  {provider['name']}: Credentials not found, skipping...")
+                    continue
+                
+                llm = ChatCloudflareWorkersAI(
+                    account_id=account_id,
+                    api_token=api_token,
+                    model=provider["model"],
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    streaming=True
+                )
+                
+                # Test the connection
+                test_response = llm.invoke([HumanMessage(content="test")])
+                
+                model_name_global = provider["name"]
+                stream_log(f"✅ Successfully connected to {provider['name']} ({provider['model']})")
+                return llm
+                
+            elif provider["type"] == "openrouter":
+                # OpenRouter fallback (your existing implementation)
+                from langchain_openai import ChatOpenAI
+                
+                api_key = os.getenv(provider["api_key_env"])
+                if not api_key:
+                    stream_log(f"⚠️  {provider['name']}: API key not found, skipping...")
+                    continue
+                
+                llm = ChatOpenAI(
+                    model=provider["model"],
+                    openai_api_key=api_key,
+                    openai_api_base="https://openrouter.ai/api/v1",
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    default_headers={
+                        "HTTP-Referer": "http://localhost:5000",
+                        "X-Title": "Research Brief Generator"
+                    },
+                    streaming=True
+                )
+                
+                model_name_global = provider["name"]
+                stream_log(f"✅ Successfully connected to {provider['name']} ({provider['model']})")
+                return llm
+                
         except Exception as e:
-            stream_log(f"Failed to create LLM with model {model_repo}: {e}")
+            stream_log(f"❌ Failed to connect to {provider['name']}: {str(e)}")
             continue
-
-    raise RuntimeError("Failed to create LLM with all fallback models")
+    
+    # If all providers fail
+    raise RuntimeError(
+        "❌ Failed to create LLM with all providers. "
+        "Please check your API keys: GOOGLE_API_KEY, CF_ACCOUNT_ID, CF_API_TOKEN, OPENROUTER_API_KEY"
+    )
 
 
 def planning_node(state: AdvancedResearchState):
