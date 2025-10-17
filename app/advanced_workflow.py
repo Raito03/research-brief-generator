@@ -71,6 +71,74 @@ import threading
 #     performance_monitor = EmergencyFallback()
 #     count_tokens = lambda text, model_name="gpt-3.5-turbo": len(str(text).split()) * 1.3
 
+from langchain_core.language_models.chat_models import SimpleChatModel
+from langchain_core.messages import BaseMessage, AIMessage
+from langchain_core.outputs import ChatResult, ChatGeneration
+from pydantic import Field, ConfigDict
+from typing import Any, List, Optional
+
+class CloudflareChatWrapper(SimpleChatModel):
+    """
+    Wrapper to make CloudflareWorkersAI compatible with Chat interface
+    Properly configured for Pydantic v2
+    """
+    
+    # ✅ Use ConfigDict for Pydantic v2
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,  # Allow CloudflareWorkersAI type
+        extra='allow'  # Allow extra fields
+    )
+    
+    # ✅ Define fields properly
+    account_id: str
+    api_token: str
+    model_name: str = "@cf/meta/llama-3.1-8b-instruct"
+    temperature: float = 0.7
+    max_tokens: Optional[int] = None
+    
+    # Internal LLM instance (initialized after __init__)
+    _llm: Any = None
+    
+    def __init__(self, **data):
+        """Initialize the wrapper and create CloudflareWorkersAI instance"""
+        super().__init__(**data)
+        
+        # Create the actual Cloudflare LLM after initialization
+        from langchain_community.llms.cloudflare_workersai import CloudflareWorkersAI
+        
+        self._llm = CloudflareWorkersAI(
+            account_id=self.account_id,
+            api_token=self.api_token,
+            model=self.model_name,
+            streaming=False
+        )
+    
+    def _call(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> str:
+        """
+        Convert messages to prompt and call CloudflareWorkersAI
+        """
+        # Convert messages to a single string prompt
+        prompt = "\n".join([
+            f"{'User' if msg.type == 'human' else 'Assistant'}: {msg.content}"
+            for msg in messages
+        ])
+        
+        # Call the LLM (returns string)
+        response = self._llm.invoke(prompt)
+        
+        return response
+    
+    @property
+    def _llm_type(self) -> str:
+        """Return identifier for this model"""
+        return "cloudflare-chat-wrapper"
+
 class EmergencyFallback:
     def __getattr__(self, name):
         return lambda *args, **kwargs: None
@@ -128,7 +196,7 @@ def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> Cha
     Priority: Google AI Studio (Gemini) → Cloudflare Workers AI → OpenRouter
     """
     global model_name_global
-    
+    from google.api_core.exceptions import ResourceExhausted
     # Provider configurations with their models
     providers = [
         {
@@ -168,19 +236,25 @@ def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> Cha
                     google_api_key=api_key,
                     temperature=temperature,
                     max_output_tokens=max_tokens,
+                    max_retries=0,
+                    request_timeout=30,  # ✅ 30 second timeout
                     streaming=True
                 )
                 
-                # Test the connection with a simple call
-                test_response = llm.invoke([HumanMessage(content="test")])
-                
-                model_name_global = provider["name"]
-                stream_log(f"✅ Successfully connected to {provider['name']} ({provider['model']})")
-                return llm
+                # Test the connection with quota error handling
+                try:
+                    test_response = llm.invoke([HumanMessage(content="test")])
+                    model_name_global = provider['name']
+                    stream_log(f"✅ Successfully connected to {provider['name']} ({provider['model']})")
+                    return llm
+                except ResourceExhausted as quota_error:
+                    # ✅ INSTANT SWITCH on quota exhaustion
+                    stream_log(f"❌ {provider['name']}: Quota exhausted - switching to next provider immediately")
+                    stream_log(f"   Error: {str(quota_error)[:100]}...")
+                    continue  # Skip to next provider immediately
                 
             elif provider["type"] == "cloudflare":
                 # Cloudflare Workers AI
-                from langchain_community.chat_models import ChatCloudflareWorkersAI
                 
                 account_id = os.getenv(provider["account_id_env"])
                 api_token = os.getenv(provider["api_token_env"])
@@ -189,19 +263,17 @@ def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> Cha
                     stream_log(f"⚠️  {provider['name']}: Credentials not found, skipping...")
                     continue
                 
-                llm = ChatCloudflareWorkersAI(
+                llm = CloudflareChatWrapper(
                     account_id=account_id,
                     api_token=api_token,
-                    model=provider["model"],
+                    model=provider['model'],
                     temperature=temperature,
-                    max_tokens=max_tokens,
-                    streaming=True
+                    max_tokens=max_tokens
                 )
                 
                 # Test the connection
                 test_response = llm.invoke([HumanMessage(content="test")])
-                
-                model_name_global = provider["name"]
+                model_name_global = provider['name']
                 stream_log(f"✅ Successfully connected to {provider['name']} ({provider['model']})")
                 return llm
                 
@@ -230,12 +302,18 @@ def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> Cha
                 model_name_global = provider["name"]
                 stream_log(f"✅ Successfully connected to {provider['name']} ({provider['model']})")
                 return llm
-                
+        
+        except ResourceExhausted as quota_error:
+            # Catch quota errors at the provider level
+            stream_log(f"❌ {provider['name']}: Quota exhausted - switching immediately")
+            continue
+
         except Exception as e:
             stream_log(f"❌ Failed to connect to {provider['name']}: {str(e)}")
             continue
     
     # If all providers fail
+    stream_log("🚨 CRITICAL: All LLM providers failed or exhausted")
     raise RuntimeError(
         "❌ Failed to create LLM with all providers. "
         "Please check your API keys: GOOGLE_API_KEY, CF_ACCOUNT_ID, CF_API_TOKEN, OPENROUTER_API_KEY"

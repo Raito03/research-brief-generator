@@ -65,7 +65,7 @@ export function ResultDisplay({ brief, onReset }: Props) {
           onClick={onReset}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="px-6 py-3 bg-american-blue text-cadet-grey rounded-xl font-medium hover:bg-american-blue/80 transition-colors"
+          className="px-7 py-3 bg-american-blue text-cadet-grey rounded-xl font-medium hover:bg-american-blue/80 transition-colors"
         >
           New Search
         </motion.button>

@@ -56,11 +56,11 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
   ];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8">
+    <div className="min-h-screen flex flex-col items-center justify-center p-8 gap-5">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-12"
+        className="text-center mb-3"
       >
         <h1 className="text-4xl md:text-5xl font-bold text-cadet-grey mb-4">
           <TypeAnimation
@@ -88,22 +88,22 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.3 }}
-            className="space-y-6"
+            className="space-y-3"
           >
             {/* Question */}
-            <h2 className="text-2xl font-semibold text-cadet-grey text-center mb-8">
+            <h2 className="text-2xl font-semibold text-cadet-grey text-center mb-4">
               What would you like to research?
             </h2>
 
             {/* Input Field */}
-            <div className="space-y-4">
+            <div className="gap-4">
               <input
                 type="text"
                 value={topicInput}
                 onChange={(e) => setTopicInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleTopicSubmit()}
                 placeholder="e.g., Artificial Intelligence"
-                className="focus:outline-none focus:ring-0 focus:border-transparent focus:ring-0 w-full bg-chinese-black/50 border border-ube/30 rounded-full px-8 py-5 text-cadet-grey placeholder-cool-grey/50 transition-all text-center text-lg"
+                className="focus:outline-none focus:ring-0 focus:border-transparent focus:ring-0 w-full bg-chinese-black/50 border border-ube/30 rounded-full px-2 py-2 text-cadet-grey placeholder-cool-grey/50 transition-all text-center text-lg"
                 autoFocus
               />
               
@@ -120,7 +120,7 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
                 disabled={topicInput.trim().length < 5}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="w-64 mx-auto block bg-ube text-chinese-black font-semibold py-4 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:bg-ube/90"
+                className="w-32 mx-auto block bg-ube text-chinese-black font-semibold py-2 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:bg-ube/90"
               >
                 Continue
               </motion.button>
@@ -136,7 +136,7 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
-              className="space-y-6"
+              className="space-y-2"
             >
               {/* Back Button */}
               <button
@@ -146,8 +146,8 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
                 ← Back
               </button>
 
-              <div className="gap-5 text-center bg-american-blue/10 backdrop-blur-sm border border-ube/20 rounded-2xl p-8">
-                <h2 className="text-cadet-grey text-xl mb-6">
+              <div className="gap-3 text-center bg-american-blue/10 backdrop-blur-sm border border-ube/20 rounded-2xl p-2">
+                <h2 className="text-cadet-grey text-xl mb-2">
                   How deep should the research be?
                 </h2>
 
@@ -158,13 +158,13 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
                       onClick={() => handleDepthSelect(option.value)}
                       whileHover={{ scale: 1.02, x: 4 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`w-full text-left px-6 py-5 rounded-xl border-2 transition-all ${
+                      className={`w-full text-left px-3 py-3 rounded-xl border-2 transition-all ${
                         formData.depth === option.value
                           ? 'bg-ube/20 border-ube'
                           : 'bg-american-blue/20 border-ube/20 hover:border-ube/40'
                       }`}
                     >
-                       <div className="flex items-center justify-between gap-4 px-6 py-5">
+                       <div className="flex items-center justify-between gap-3 px-3 py-3">
                         <div className="min-w-0 space-y-1 pr-2">
                           <div className="font-semibold text-cadet-grey text-lg">
                             {option.label}
@@ -200,8 +200,8 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
                 ← Back
               </button>
 
-              <div className="bg-american-blue/10 backdrop-blur-sm border border-ube/20 rounded-2xl p-8">
-                <h2 className="text-cadet-grey text-xl mb-6">
+              <div className="bg-american-blue/10 backdrop-blur-sm border border-ube/20 rounded-2xl p-3">
+                <h2 className="text-cadet-grey text-xl mb-3">
                   Preferred summary length?
                 </h2>
 
@@ -212,7 +212,7 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
                       onClick={() => handleLengthSelect(option.value)}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className={`p-6 rounded-xl border transition-all ${
+                      className={`p-3 rounded-xl border transition-all ${
                         formData.summaryLength === option.value
                           ? 'bg-ube/20 border-ube'
                           : 'bg-american-blue/20 border-ube/20 hover:border-ube/40'
@@ -236,7 +236,7 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
-              className="space-y-6"
+              className="space-y-3"
             >
               <button
                 onClick={handleBack}
@@ -246,11 +246,11 @@ export function ParameterCollection({ formData, setFormData, onSubmit }: Props) 
               </button>
 
               <div className="bg-american-blue/10 backdrop-blur-sm border border-ube/20 rounded-2xl p-8">
-                <h2 className="text-cadet-grey text-xl mb-6">
+                <h2 className="text-cadet-grey text-xl mb-3">
                   Ready to generate your research brief
                 </h2>
 
-                <div className="space-y-4 mb-8">
+                <div className="space-y-2 mb-8">
                   <div className="flex justify-between items-center py-3 border-b border-ube/20">
                     <span className="text-cool-grey">Topic</span>
                     <span className="text-cadet-grey font-medium">
