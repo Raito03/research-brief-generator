@@ -56,7 +56,9 @@ This AI research assistant demonstrates advanced integration of modern AI techno
 - **⚡ FastAPI**: High-performance web framework
 - **🦜 LangChain**: LLM integration and prompt management
 - **🔄 LangGraph**: State-driven AI workflow orchestration
-- **🌐 OpenRouter**: Multi-model LLM access (Sonoma Dusk Alpha)
+- **♊ Google Gemini (via Google AI Studio)**: Primary provider using gemini-2.0-flash-lite
+- **☁️ Cloudflare Workers AI**: Secondary fallback with llama-3.1-8b-instruct
+- **🌐 OpenRouter (DeepSeek)**: Tertiary fallback using deepseek-chat-v3.1-free
 - **📝 Pydantic**: Strict data validation and serialization
 - **🚀 Railway**: Cloud deployment and scaling platform
 - **🔍 DuckDuckGo**: Real-time web search integration
@@ -66,7 +68,10 @@ This AI research assistant demonstrates advanced integration of modern AI techno
 ### Prerequisites
 #### System requirements
 - Python 3.11 or higher
-- OpenRouter API key (free from openrouter.ai)
+- Google AI Studio API key (Primary - free from ai.google.dev) OR
+- Cloudflare Workers AI credentials (Account ID + API Token from cloudflare.com) OR
+- OpenRouter API key (Fallback - free from openrouter.ai)
+- Note: At least one provider must be configured
 - Git for version control
 
 ### Installation & Setup
@@ -94,9 +99,18 @@ python -c "import fastapi, langchain, langgraph; print('✅ All dependencies ins
 cp .env.example .env
 ```
 
-##### Edit .env file and add your OpenRouter API key
+##### Edit .env file and add your API keys
 ```
-echo "OPENROUTER_API_KEY=your_actual_api_key_here" >> .env
+# Option 1: Google Gemini (Recommended)
+echo "GOOGLE_API_KEY=your_google_api_key_here" >> .env
+
+# Option 2: Cloudflare Workers AI
+echo "CF_ACCOUNT_ID=your_cloudflare_account_id" >> .env
+echo "CF_API_TOKEN=your_cloudflare_api_token" >> .env
+
+# Option 3: OpenRouter (Fallback)
+echo "OPENROUTER_API_KEY=your_openrouter_key_here" >> .env
+
 ```
 
 #### 3. Run Local Development Server
@@ -359,7 +373,10 @@ railway init
 
 ##### Set environment variables
 ```
-railway variables set OPENROUTER_API_KEY=your_actual_key_here
+railway variables set GOOGLE_API_KEY=your_google_api_key
+railway variables set CF_ACCOUNT_ID=your_cloudflare_account_id
+railway variables set CF_API_TOKEN=your_cloudflare_api_token
+railway variables set OPENROUTER_API_KEY=your_openrouter_key
 ```
 
 ##### Deploy application

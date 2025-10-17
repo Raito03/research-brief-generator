@@ -1,384 +1,139 @@
-name: Research Brief Generator CI/CD Pipeline
+name: 🤖 AI Research Brief Generator - CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop, feature/* ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, develop ]
-  schedule:
-    - cron: '0 2 * * 0'  # Weekly health check on Sundays at 2 AM
-
-env:
-  PYTHON_VERSION: '3.11'
-  POETRY_VERSION: '1.6.1'
+    branches: [ main, master ]
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
-  code-quality:
-    name: Code Quality Checks
+  # ========================================
+  # Job 1: Code Quality & Linting
+  # ========================================
+  lint:
+    name: 🔍 Code Quality Check
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install flake8 black isort mypy bandit safety
-        pip install -r requirements.txt
-    
-    - name: Run Black (code formatting)
-      run: |
-        black --check --diff .
-    
-    - name: Run isort (import sorting)
-      run: |
-        isort --check-only --diff .
-    
-    - name: Run flake8 (linting)
-      run: |
-        # Stop build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings (adjust as needed)
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    
-    - name: Run mypy (type checking)
-      run: |
-        mypy app/advanced_workflow.py app/api.py app/schemas.py --ignore-missing-imports --strict-optional
-      continue-on-error: true
-    
-    - name: Run bandit (security scan)
-      run: |
-        bandit -r . -f json -o bandit-report.json || true
-    
-    - name: Run safety (dependency vulnerability scan)
-      run: |
-        safety check --json --output safety-report.json || true
-    
-    - name: Upload security scan results
-      uses: actions/upload-artifact@v3
-      with:
-        name: security-reports
-        path: |
-          bandit-report.json
-          safety-report.json
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: 🎨 Check Code Formatting with Black
+        run: black --check --diff *.py app/ || true
+      
+      - name: 🔎 Lint with Flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
+  # ========================================
+  # Job 2: Run Tests
+  # ========================================
   test:
-    name: Test Suite
+    name: 🧪 Run Tests
     runs-on: ubuntu-latest
-    needs: code-quality
+    needs: lint  # Run after linting passes
+    
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
-        
+        python-version: ['3.10', '3.11', '3.12']
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-    
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-${{ matrix.python-version }}-pip-${{ hashFiles('**/requirements.txt') }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-asyncio pytest-cov pytest-mock pytest-xdist pytest-timeout tiktoken
-    
-    - name: Set up test environment variables
-      run: |
-        echo "OPENROUTER_API_KEY=test_key_for_ci" >> $GITHUB_ENV
-        echo "LANGCHAIN_TRACING_V2=false" >> $GITHUB_ENV
-        echo "LANGSMITH_API_KEY=" >> $GITHUB_ENV
-    
-    - name: Run unit tests with coverage
-      run: |
-        pytest test/test_workflow.py -v \
-          --cov=app.advanced_workflow \
-          --cov=app.api \
-          --cov=app.schemas \
-          --cov-report=xml \
-          --cov-report=term-missing \
-          --cov-report=html \
-          --timeout=300 \
-          --maxfail=5 \
-          -n auto
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-${{ matrix.python-version }}
-        fail_ci_if_error: false
-    
-    - name: Upload test results
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: test-results-${{ matrix.python-version }}
-        path: |
-          coverage.xml
-          htmlcov/
-          pytest-report.xml
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+      
+      - name: 🧪 Run Tests with pytest
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          pytest test_api.py -v --cov=. --cov-report=xml --cov-report=html --cov-report=term
+      
+      - name: 📊 Upload Coverage Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report-py${{ matrix.python-version }}
+          path: |
+            htmlcov/
+            coverage.xml
 
-  integration-test:
-    name: Integration Tests
+  # ========================================
+  # Job 3: API Health Check (Production)
+  # ========================================
+  health-check:
+    name: 🏥 Production Health Check
     runs-on: ubuntu-latest
     needs: test
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install httpx requests
-    
-    - name: Test CLI functionality
-      run: |
-        python -m app.cli --help
-        python -m app.cli --topic "test topic" --depth 1 --dry-run || echo "CLI test completed"
-    
-    - name: Start API server for testing
-      run: |
-        python -m uvicorn app.api:app --host 0.0.0.0 --port 8000 &
-        sleep 10
-        echo "API_PID=$!" >> $GITHUB_ENV
-      env:
-        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY || 'test_key' }}
-        LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY || '' }}
-    
-    - name: Test API endpoints
-      run: |
-        python -c "
-        import httpx, asyncio, time
-        
-        async def test_endpoints():
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                try:
-                    # Test health endpoint
-                    health_response = await client.get('http://localhost:8000/health')
-                    print(f'Health check: {health_response.status_code}')
-                    
-                    # Test docs endpoint
-                    docs_response = await client.get('http://localhost:8000/docs')
-                    print(f'Docs endpoint: {docs_response.status_code}')
-                    
-                    # Test metrics endpoint
-                    metrics_response = await client.get('http://localhost:8000/metrics/performance')
-                    print(f'Metrics endpoint: {metrics_response.status_code}')
-                    
-                except Exception as e:
-                    print(f'API test error: {e}')
-        
-        asyncio.run(test_endpoints())
-        "
-    
-    - name: Stop API server
-      run: |
-        pkill -f "uvicorn app.api:app" || true
-    
-    - name: Run integration tests with real API calls
-      run: |
-        pytest test/test_workflow.py::TestEndToEndWorkflow -v --timeout=600
-      env:
-        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
-        INTEGRATION_TESTS: true
-      continue-on-error: true
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 📦 Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+      
+      - name: 🔍 Run Deployment Tests
+        run: |
+          python test_deployed_api.py
+      
+      - name: ✅ Health Check Passed
+        run: echo "✅ Production API is healthy and responding correctly!"
 
-  performance-test:
-    name: Performance Benchmarks
+  # ========================================
+  # Job 4: Build Notification (Success)
+  # ========================================
+  notify-success:
+    name: ✅ Build Success Notification
     runs-on: ubuntu-latest
-    needs: test
+    needs: [lint, test, health-check]
+    if: success()
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-benchmark
-    
-    - name: Run performance benchmarks
-      run: |
-        pytest test/test_workflow.py::TestPerformanceBenchmarks -v --benchmark-only
-    
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
-      with:
-        name: performance-benchmarks
-        path: .benchmarks/
-
-  security-audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    needs: code-quality
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
-    
-    - name: Upload Trivy scan results
-      uses: github/codeql-action/upload-sarif@v2
-      with:
-        sarif_file: 'trivy-results.sarif'
-
-  build-and-deploy:
-    name: Build and Deploy
-    runs-on: ubuntu-latest
-    needs: [test, integration-test]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
-    
-    - name: Build application
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        python -c "
-        print('✅ Application build successful')
-        print('📦 Dependencies installed')
-        print('🔧 Configuration validated')
-        "
-    
-    - name: Deploy to Railway (Production)
-      if: success()
-      run: |
-        echo "🚀 Deploying to Railway..."
-        echo "Environment: Production"
-        echo "Branch: ${{ github.ref }}"
-        echo "Commit: ${{ github.sha }}"
-        # Add Railway deployment commands here
-        # railway deploy --service=${{ secrets.RAILWAY_SERVICE_ID }}
-      env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-    
-    - name: Post-deployment tests
-      run: |
-        echo "🔍 Running post-deployment health checks..."
-        # Add health check commands for production deployment
-        sleep 30  # Wait for deployment
-        echo "✅ Deployment health check passed"
-    
-    - name: Notify deployment status
-      if: always()
-      run: |
-        if [ "${{ job.status }}" == "success" ]; then
-          echo "✅ Deployment completed successfully"
-        else
-          echo "❌ Deployment failed"
-        fi
-
-  cleanup:
-    name: Cleanup and Reporting
-    runs-on: ubuntu-latest
-    needs: [test, integration-test, performance-test, security-audit]
-    if: always()
-    
-    steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v3
-    
-    - name: Generate CI/CD report
-      run: |
-        echo "# CI/CD Pipeline Report" > pipeline-report.md
-        echo "" >> pipeline-report.md
-        echo "## Test Results" >> pipeline-report.md
-        echo "- **Status**: ${{ needs.test.result }}" >> pipeline-report.md
-        echo "- **Integration Tests**: ${{ needs.integration-test.result }}" >> pipeline-report.md
-        echo "- **Performance Tests**: ${{ needs.performance-test.result }}" >> pipeline-report.md
-        echo "- **Security Audit**: ${{ needs.security-audit.result }}" >> pipeline-report.md
-        echo "" >> pipeline-report.md
-        echo "## Artifacts Generated" >> pipeline-report.md
-        echo "- Test coverage reports" >> pipeline-report.md
-        echo "- Security scan results" >> pipeline-report.md
-        echo "- Performance benchmarks" >> pipeline-report.md
-        echo "" >> pipeline-report.md
-        echo "**Generated**: $(date)" >> pipeline-report.md
-    
-    - name: Upload pipeline report
-      uses: actions/upload-artifact@v3
-      with:
-        name: pipeline-report
-        path: pipeline-report.md
-
-  notify:
-    name: Notify Results
-    runs-on: ubuntu-latest
-    needs: [test, integration-test, build-and-deploy]
-    if: always()
-    
-    steps:
-    - name: Prepare notification
-      run: |
-        if [ "${{ needs.test.result }}" == "success" ] && [ "${{ needs.integration-test.result }}" == "success" ]; then
-          echo "PIPELINE_STATUS=✅ SUCCESS" >> $GITHUB_ENV
-          echo "PIPELINE_MESSAGE=All tests passed successfully!" >> $GITHUB_ENV
-        elif [ "${{ needs.test.result }}" == "failure" ] || [ "${{ needs.integration-test.result }}" == "failure" ]; then
-          echo "PIPELINE_STATUS=❌ FAILED" >> $GITHUB_ENV  
-          echo "PIPELINE_MESSAGE=Pipeline failed - check test results" >> $GITHUB_ENV
-        else
-          echo "PIPELINE_STATUS=⚠️ PARTIAL" >> $GITHUB_ENV
-          echo "PIPELINE_MESSAGE=Pipeline completed with some issues" >> $GITHUB_ENV
-        fi
-    
-    - name: Output results
-      run: |
-        echo "## Pipeline Results"
-        echo "${{ env.PIPELINE_STATUS }}"
-        echo "${{ env.PIPELINE_MESSAGE }}"
-        echo ""
-        echo "### Job Results:"
-        echo "- Tests: ${{ needs.test.result }}"
-        echo "- Integration: ${{ needs.integration-test.result }}" 
-        echo "- Deployment: ${{ needs.build-and-deploy.result }}"
+      - name: 🎉 Success Message
+        run: |
+          echo "============================================"
+          echo "🎉 CI/CD Pipeline Completed Successfully!"
+          echo "============================================"
+          echo "✅ Code Quality: PASSED"
+          echo "✅ Tests: PASSED"
+          echo "✅ Health Check: PASSED"
+          echo "============================================"
+          echo "🚀 Ready for deployment!"

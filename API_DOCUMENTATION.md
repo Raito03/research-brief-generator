@@ -6,11 +6,27 @@ The AI Research Brief Generator provides a RESTful API for generating comprehens
 
 - **Base URL**: `https://ai-research-assistant-production-1ef8.up.railway.app`
 - **API Version**: 1.0.0
+- **LLM Providers**: Multi-provider fallback (Google Gemini → Cloudflare Workers AI → OpenRouter)
+- **Provider Selection**: Automatic with priority-based failover
 - **Content-Type**: `application/json`
 
-## Authentication
+## Authentication & Configuration
 
-Currently, no authentication is required for public endpoints. API usage is rate-limited by Railway's infrastructure.
+### API Keys Required
+The system uses a multi-provider fallback strategy. Configure at least one provider:
+
+1. **Google Gemini (Primary)**: `GOOGLE_API_KEY` from ai.google.dev
+2. **Cloudflare Workers AI (Secondary)**: `CF_ACCOUNT_ID` + `CF_API_TOKEN`
+3. **OpenRouter (Tertiary)**: `OPENROUTER_API_KEY` from openrouter.ai
+
+### Provider Priority
+The system automatically attempts providers in order:
+1. Google Gemini (gemini-2.0-flash-lite)
+2. Cloudflare Workers AI (llama-3.1-8b-instruct)
+3. OpenRouter (deepseek-chat-v3.1-free)
+
+If all providers fail, the request returns an error.
+
 
 ## Endpoints
 
@@ -317,6 +333,12 @@ Times may vary based on:
 3. **Meaningful user IDs**: Use consistent identifiers for follow-up research
 4. **Specific topics**: More specific topics yield better results
 
+### Provider Configuration
+1. **Multiple Providers**: Configure multiple providers for better reliability
+2. **Primary Provider**: Google Gemini offers best performance and quality
+3. **Fallback Strategy**: System automatically switches if primary fails
+4. **Cost Optimization**: Free tiers available for all supported providers
+
 ### Error Handling
 ```python
 import requests
@@ -420,6 +442,6 @@ For technical support or questions about the API:
 
 ---
 
-- **Last Updated**: September 25, 2025
+- **Last Updated**: October 17, 2025
 - **API Version**: 1.0.0
 - **Documentation Version**: 1.0.0

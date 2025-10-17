@@ -10,8 +10,8 @@ The AI Research Brief Generator is a production-grade application built using mo
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Client Layer │
 ├─────────────────┬─────────────────┬─────────────────┬───────────────┤
-│ CLI Tool │ REST API │ Web UI │ PowerShell │
-│ (cli.py) │ Clients │ (/docs) │ Scripts │
+│        CLI Tool │        REST API │          Web UI │    PowerShell │
+│        (cli.py) │         Clients │         (/docs) │       Scripts │
 └─────────────────┴─────────────────┴─────────────────┴───────────────┘
 │
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -19,10 +19,10 @@ The AI Research Brief Generator is a production-grade application built using mo
 ├─────────────────────────────────────────────────────────────────────┤
 │ FastAPI Server (api.py) │
 │ ┌─────────────┬─────────────┬─────────────┬─────────────────────┐ │
-│ │ Routing │ Validation │ Middleware │ Error Handling │ │
-│ │ /brief │ Pydantic │ CORS │ Exception Mgmt │ │
-│ │ /health │ Schemas │ Logging │ Response Format │ │
-│ │ /docs │ (schemas.py)│ │ Status Codes │ │
+│ │     Routing │  Validation │  Middleware │      Error Handling │ │
+│ │      /brief │    Pydantic │        CORS │      Exception Mgmt │ │
+│ │     /health │     Schemas │     Logging │     Response Format │ │
+│ │       /docs │ (schemas.py)│             │        Status Codes │ │
 │ └─────────────┴─────────────┴─────────────┴─────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────┘
 │
@@ -42,12 +42,13 @@ The AI Research Brief Generator is a production-grade application built using mo
 │
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Integration Layer │
-├─────────────────┬─────────────────┬─────────────────┬───────────────┤
-│ OpenRouter │ DuckDuckGo │ LangChain │ Pydantic │
-│ LLM API │ Search API │ Components │ Validation │
-│ Multi-model │ Real-time │ Prompt Mgmt │ Serialization│
-│ Access │ Web Search │ Chain Ops │ Type Safety │
-└─────────────────┴─────────────────┴─────────────────┴───────────────┘
+├──────────────┬──────────────┬──────────────┬──────────────┬─────────┤
+│    Multi-LLM │   DuckDuckGo │    LangChain │     Pydantic │
+│     Provider │   Search API │   Components │   Validation │
+│ Google Gemini│    Real-time │  Prompt Mgmt │ Serialization│
+│   Cloudflare │   Web Search │    Chain Ops │  Type Safety │
+│   OpenRouter │              │              │              │
+└──────────────┴──────────────┴──────────────┴──────────────┴─────────┘
 │
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Infrastructure Layer │
@@ -105,10 +106,10 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
 
 #### Workflow State Machine:
 ```
-┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-│ Planning │───▶│ Search │───▶│ Summarize │───▶│ Synthesis │
-│ Node │ │ Node │ │ Node │ │ Node │
-└─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
+┌─────────────┐     ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+│ Planning    │───▶│ Search │───▶│ Summarize │───▶│ Synthesis │
+│      Node   │     │ Node │ │ Node │ │ Node │
+└─────────────┘     └─────────────┘ └─────────────┘ └─────────────┘
 │ │ │ │
 ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
 │Research │ │Web │ │Source │ │Final │
@@ -185,11 +186,19 @@ def validate_topic(cls, v):
 
 ### 4. Integration Layer
 
-#### OpenRouter Integration
-- **Multi-model Access**: Sonoma Dusk Alpha (primary)
-- **Request Management**: Automatic retry with exponential backoff
+#### Multi-Provider LLM Integration
+**Provider Hierarchy:**
+1. **Google Gemini (Primary)**: `gemini-2.0-flash-lite` via Google AI Studio
+2. **Cloudflare Workers AI (Secondary)**: `llama-3.1-8b-instruct` fallback
+3. **OpenRouter (Tertiary)**: `deepseek-chat-v3.1-free` last resort
+
+**Features:**
+- **Automatic Failover**: Seamless switching between providers on failure
+- **Request Management**: Automatic retry with exponential backoff per provider
 - **Token Management**: Dynamic token calculation based on summary length
-- **Cost Optimization**: Model selection based on request complexity
+- **Cost Optimization**: Free-tier providers prioritized
+- **Provider Health Tracking**: Emergency fallback system for complete provider failures
+
 
 #### DuckDuckGo Search Integration
 - **Real-time Search**: Live web search without API keys
@@ -202,6 +211,61 @@ def validate_topic(cls, v):
 - **Message Management**: Structured conversation handling
 - **Chain Operations**: Sequential and parallel LLM operations
 - **Memory Management**: Context preservation for follow-up research
+
+#### LLM Provider Architecture
+
+**Initialization Logic:**
+```python
+def initialize_llm():
+    """Multi-provider fallback initialization"""
+    global llm, model_name_global
+    # Priority 1: Google Gemini
+    if os.getenv("GOOGLE_API_KEY"):
+        try:
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-2.0-flash-lite",
+                google_api_key=os.getenv("GOOGLE_API_KEY"),
+                temperature=0.7
+            )
+            model_name_global = "gemini-2.0-flash-lite"
+            return
+        except Exception as e:
+            print(f"Google Gemini failed: {e}")
+
+    # Priority 2: Cloudflare Workers AI
+    if os.getenv("CF_ACCOUNT_ID") and os.getenv("CF_API_TOKEN"):
+        try:
+            llm = ChatCloudflareWorkersAI(
+                account_id=os.getenv("CF_ACCOUNT_ID"),
+                api_token=os.getenv("CF_API_TOKEN"),
+                model="@cf/meta/llama-3.1-8b-instruct"
+            )
+            model_name_global = "llama-3.1-8b-instruct"
+            return
+        except Exception as e:
+            print(f"Cloudflare Workers AI failed: {e}")
+
+    # Priority 3: OpenRouter (Fallback)
+    if os.getenv("OPENROUTER_API_KEY"):
+        llm = ChatOpenAI(
+            model="deepseek/deepseek-chat-v3.1-free",
+            openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+            openai_api_base="https://openrouter.ai/api/v1"
+        )
+        model_name_global = "deepseek-chat-v3.1-free"
+        return
+
+    # Emergency fallback
+    llm = EmergencyFallback()
+    model_name_global = "emergency-fallback"
+
+```
+
+**Fallback Strategy:**
+- Providers are tried sequentially based on environment variable availability
+- Each provider has independent error handling
+- Emergency fallback returns mock responses if all providers fail
+- Global `model_name_global` variable tracks active provider
 
 ### 5. Infrastructure Layer
 
@@ -292,10 +356,16 @@ CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
 - **Health Checks**: Non-sensitive system status information only
 
 ### Environment Security:
-- **Secret Management**: Environment variables for API keys
+- **Secret Management**: Multiple provider API keys via environment variables
+  - `GOOGLE_API_KEY` for Google Gemini
+  - `CF_ACCOUNT_ID` + `CF_API_TOKEN` for Cloudflare
+  - `OPENROUTER_API_KEY` for OpenRouter
+- **Provider Isolation**: Each provider has independent credential management
 - **Container Isolation**: Docker containerization for process isolation
 - **HTTPS Enforcement**: Automatic SSL/TLS via Railway infrastructure
-- **Logging Security**: No sensitive data in logs
+- **Logging Security**: No API keys or sensitive data in logs
+- **Fallback Security**: Emergency fallback doesn't expose provider failures
+
 
 ## Performance Architecture
 
@@ -312,6 +382,13 @@ CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
 - **Connection Pooling**: Efficient HTTP client connection management
 
 ### Monitoring & Observability:
+#### Provider Tracking
+Active LLM provider is stored in `model_name_global` for:
+- Performance metrics per provider
+- Error tracking and debugging
+- Cost attribution
+- API response logging
+
 #### Performance tracking at each workflow node
 ```python
 start_time = time.time()
@@ -362,8 +439,19 @@ Live Traffic → Monitoring
 ```python
 # Environment-based configuration
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+
+# Multi-provider LLM configuration (priority order)
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")  # Primary
+CF_ACCOUNT_ID = os.getenv("CF_ACCOUNT_ID")    # Secondary
+CF_API_TOKEN = os.getenv("CF_API_TOKEN")      # Secondary
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # Tertiary
+
+# At least one provider must be configured
+if not any([GOOGLE_API_KEY, (CF_ACCOUNT_ID and CF_API_TOKEN), OPENROUTER_API_KEY]):
+    raise ValueError("At least one LLM provider must be configured")
+
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
 ```
 
 ## Future Architecture Considerations
@@ -374,6 +462,14 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 - **API Gateway**: Kong or similar for advanced rate limiting and analytics
 - **Message Queue**: Async processing for long-running research tasks
 
+### LLM Provider Enhancements:
+- **Provider Pool Management**: Dynamic load balancing across multiple providers
+- **Cost Analytics**: Track token usage and cost per provider
+- **Provider Health Monitoring**: Real-time availability checks
+- **Smart Routing**: AI-driven provider selection based on task complexity
+- **Regional Failover**: Geographic provider distribution for latency optimization
+- **Custom Provider Support**: Plugin architecture for new LLM providers
+
 ### Feature Extensions:
 - **Multi-tenant Architecture**: Separate namespaces per organization
 - **Authentication Service**: JWT-based authentication and authorization
@@ -383,5 +479,5 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 ---
 
 **Architecture Documentation Version**: 1.0.0  
-**Last Updated**: September 18, 2025  
+**Last Updated**: October 17, 2025  
 **System Version**: 1.0.0
