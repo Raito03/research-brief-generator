@@ -27,7 +27,7 @@ import json
 # WHY: localhost:8000 is the default FastAPI development server address
 # API_BASE_URL = "http://localhost:8000"
 import os
-API_BASE_URL = os.getenv("API_BASE_URL", "https://ai-research-assistant-production-1ef8.up.railway.app")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://research-brief-generator-7b22.onrender.com")
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 

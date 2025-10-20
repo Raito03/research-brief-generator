@@ -96,6 +96,7 @@ async def root():
     )
 
 @app.get("/health", response_model=HealthResponse)
+@app.head("/health")
 async def health_check():
     """
     Health check endpoint - like asking "Are you open?"
