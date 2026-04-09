@@ -20,17 +20,15 @@ from app.schemas import ResearchPlan, SourceSummary, FinalBrief, ResearchDepth
 from ddgs import DDGS
 from app.crawler import fetch_page_content
 import asyncio
+from crawl4ai import AsyncWebCrawler
 
 
-def fetch_and_summarize(url: str) -> str:
+async def fetch_and_summarize(url: str, crawler: AsyncWebCrawler = None) -> str:
     """Fetches full page content using Crawl4AI for summarization."""
-    try:
-        content = asyncio.run(fetch_page_content(url))
-        if len(content) > 30000:
-            return content[:30000] + "... [TRUNCATED]"
-        return content
-    except Exception as e:
-        return f"Crawl error: {str(e)}"
+    content = await fetch_page_content(url, crawler)
+    if len(content) > 30000:
+        return content[:30000] + "... [TRUNCATED]"
+    return content
 
 
 import time
@@ -815,18 +813,24 @@ def summarization_node(state: AdvancedResearchState):
 
         try:
             # Try to fetch full content with Crawl4AI, fallback to search snippet
-            full_content = result.get('content', 'No content')
-            if result.get('url'):
+            full_content = result.get("content", "No content")
+            if result.get("url"):
                 stream_log(f"     🌐 Crawling full content from {result.get('url')}...")
-                crawled_content = fetch_and_summarize(result.get('url'))
-                if "Failed to crawl:" not in crawled_content and "Crawl error:" not in crawled_content:
+                try:
+                    crawled_content = asyncio.run(
+                        fetch_and_summarize(result.get("url"))
+                    )
                     full_content = crawled_content
+                except Exception as crawl_err:
+                    stream_log(
+                        f"     ⚠️ Crawl failed ({str(crawl_err)}), falling back to DDG snippet."
+                    )
 
             # Enhanced prompt that's more explicit about format
             prompt = f"""
-            Analyze this source for the research topic: {state['topic']}
+            Analyze this source for the research topic: {state["topic"]}
 
-            Source Title: {result.get('title', 'Unknown')}
+            Source Title: {result.get("title", "Unknown")}
             Source Content: {full_content[:8000]}
 
             Provide a structured analysis:
