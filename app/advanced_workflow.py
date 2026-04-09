@@ -192,31 +192,34 @@ class AdvancedResearchState(TypedDict):
     current_step: str
 
 
-# Global variables for streaming
-log_callback: Optional[Callable] = None
-log_lock = threading.Lock()
+# Global variables for streaming replaced with ContextVars for request scoping
+from contextvars import ContextVar
+from typing import Optional, Callable
+
+request_log_callback: ContextVar[Optional[Callable]] = ContextVar(
+    "request_log_callback", default=None
+)
+model_name_ctx: ContextVar[Optional[str]] = ContextVar("model_name_ctx", default=None)
 
 
 def set_log_callback(callback: Callable):
     """Set callback function for streaming logs"""
-    global log_callback
-    with log_lock:
-        log_callback = callback
+    request_log_callback.set(callback)
 
 
 def stream_log(message: str):
     """Send log message to callback and print to console"""
     print(message)  # Always print to console
 
-    with log_lock:
-        if log_callback:
-            try:
-                log_callback(message)
-            except:
-                pass  # Don't break workflow if callback fails
+    cb = request_log_callback.get()
+    if cb:
+        try:
+            cb(message)
+        except:
+            pass  # Don't break workflow if callback fails
 
 
-model_name_global = None
+model_name_ctx.get() = None
 
 
 def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> ChatOpenAI:
@@ -224,7 +227,7 @@ def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> Cha
     Create LLM with multi-provider fallback strategy
     Priority: Google AI Studio (Gemini) → Cloudflare Workers AI → OpenRouter
     """
-    global model_name_global
+    global model_name_ctx.get()
     from google.api_core.exceptions import ResourceExhausted
 
     # Provider configurations with their models
@@ -274,7 +277,7 @@ def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> Cha
                 # Test the connection with quota error handling
                 try:
                     test_response = llm.invoke([HumanMessage(content="test")])
-                    model_name_global = provider["name"]
+                    model_name_ctx.set(provider["name"])
                     stream_log(
                         f"✅ Successfully connected to {provider['name']} ({provider['model']})"
                     )
@@ -309,7 +312,7 @@ def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> Cha
 
                 # Test the connection
                 test_response = llm.invoke([HumanMessage(content="test")])
-                model_name_global = provider["name"]
+                model_name_ctx.set(provider["name"])
                 stream_log(
                     f"✅ Successfully connected to {provider['name']} ({provider['model']})"
                 )
@@ -337,7 +340,7 @@ def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> Cha
                     streaming=True,
                 )
 
-                model_name_global = provider["name"]
+                model_name_ctx.set(provider["name"])
                 stream_log(
                     f"✅ Successfully connected to {provider['name']} ({provider['model']})"
                 )
@@ -370,7 +373,7 @@ def planning_node(state: AdvancedResearchState):
     llm = create_openrouter_llm(temperature=0, max_tokens=1500)
 
     stream_log(
-        f"📋 PLANNING: Creating research plan for '{state['topic']}' (using {model_name_global})"
+        f"📋 PLANNING: Creating research plan for '{state['topic']}' (using {model_name_ctx.get()})"
     )
 
     # Create Pydantic parser
@@ -429,7 +432,7 @@ def planning_node(state: AdvancedResearchState):
 
         node_duration = time.time() - node_start_time
         # performance_monitor.record_node_performance("planning", node_duration, True)
-        # token_tracker.track_usage(model_name_global, "planning", input_tokens, output_tokens)
+        # token_tracker.track_usage(model_name_ctx.get(), "planning", input_tokens, output_tokens)
 
         stream_log(f"✅ Generated plan with {len(plan.search_queries)} search queries")
         # stream_log(f"📊 Monitoring: {input_tokens}→{output_tokens} tokens, {node_duration:.2f}s")
@@ -777,7 +780,7 @@ def summarization_node(state: AdvancedResearchState):
     """Create structured summaries with improved parsing and validation"""
     node_start_time = time.time()
 
-    stream_log(f"📝 SUMMARIZING: Using {model_name_global} for source analysis")
+    stream_log(f"📝 SUMMARIZING: Using {model_name_ctx.get()} for source analysis")
 
     stream_log(
         f"📝 SUMMARIZING: Custom length = {state.get('summary_length', 300)} words"
@@ -890,7 +893,7 @@ def summarization_node(state: AdvancedResearchState):
 
     total_duration = time.time() - node_start_time
     # performance_monitor.record_node_performance("summarization", total_duration, len(source_summaries) > 0)
-    # token_tracker.track_usage(model_name_global, "summarization", total_input_tokens, total_output_tokens)
+    # token_tracker.track_usage(model_name_ctx.get(), "summarization", total_input_tokens, total_output_tokens)
 
     stream_log(f"✅ SUMMARIZATION COMPLETED:")
     stream_log(
@@ -1069,7 +1072,7 @@ def get_optimal_lengths(model_name: str, user_requested_length: int = 300):
 def synthesis_node(state: AdvancedResearchState):
     """Create final brief using OpenRouter Models with dynamic length optimization"""
     node_start_time = time.time()
-    stream_log(f"🎯 SYNTHESIS: Creating final research brief with {model_name_global}")
+    stream_log(f"🎯 SYNTHESIS: Creating final research brief with {model_name_ctx.get()}")
 
     if not state.get("source_summaries"):
         # performance_monitor.record_node_performance("synthesis", time.time() - node_start_time, False)
@@ -1084,14 +1087,14 @@ def synthesis_node(state: AdvancedResearchState):
 
     # Calculate optimal lengths based on current model capabilities
     exec_summary_length, detailed_analysis_length, model_context = get_optimal_lengths(
-        model_name_global, user_target_length
+        model_name_ctx.get(), user_target_length
     )
 
     # Calculate actual total target
     optimized_total_length = exec_summary_length + detailed_analysis_length
 
     stream_log(
-        f"🎯 SYNTHESIS: Optimized for {model_name_global} (context: {model_context:,} tokens)"
+        f"🎯 SYNTHESIS: Optimized for {model_name_ctx.get()} (context: {model_context:,} tokens)"
     )
     stream_log(
         f"🎯 SYNTHESIS: Executive={exec_summary_length} words, Analysis={detailed_analysis_length} words"
@@ -1238,9 +1241,9 @@ def synthesis_node(state: AdvancedResearchState):
         )
         total_duration = time.time() - node_start_time
         # performance_monitor.record_node_performance("synthesis", total_duration, True)
-        # token_tracker.track_usage(model_name_global, "synthesis", input_tokens, output_tokens)
+        # token_tracker.track_usage(model_name_ctx.get(), "synthesis", input_tokens, output_tokens)
 
-        stream_log(f"✅ Final brief created successfully with {model_name_global}!")
+        stream_log(f"✅ Final brief created successfully with {model_name_ctx.get()}!")
         stream_log(
             f"   📝 Executive summary: {len(final_brief.executive_summary)} chars"
         )
@@ -1574,7 +1577,7 @@ def main():
 
     stream_log(f"🎯 Topic: {initial_state['topic']}")
     stream_log(f"📊 Depth: {initial_state['depth']}/5")
-    stream_log(f"🤖 Model: OpenRouter {model_name_global}")
+    stream_log(f"🤖 Model: OpenRouter {model_name_ctx.get()}")
     stream_log(f"👤 User: {initial_state['user_id']}")
     stream_log("=" * 70)
 
@@ -1584,7 +1587,7 @@ def main():
         if final_state.get("final_brief"):
             brief = final_state["final_brief"]
             stream_log("\n" + "=" * 70)
-            stream_log(f"🎉 RESEARCH BRIEF COMPLETED WITH {model_name_global}!")
+            stream_log(f"🎉 RESEARCH BRIEF COMPLETED WITH {model_name_ctx.get()}!")
             stream_log("=" * 70)
             stream_log(f"📋 Executive Summary:\n{brief.executive_summary}\n")
             stream_log(f"🔍 Key Findings:")

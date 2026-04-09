@@ -276,17 +276,17 @@ async def generate_brief(request: BriefRequest, background_tasks: BackgroundTask
 async def run_workflow_async(workflow_app, initial_state, log_callback):
     """Run workflow in async context with logging callback"""
     try:
-        # Import the streaming functions
-        from app.advanced_workflow import set_log_callback
+        from app.advanced_workflow import request_log_callback
 
-        # Set the global log callback
-        set_log_callback(log_callback)
+        def _run_with_context():
+            token = request_log_callback.set(log_callback)
+            try:
+                return workflow_app.invoke(initial_state)
+            finally:
+                request_log_callback.reset(token)
 
-        # Run workflow (this is sync, so run in thread pool)
         loop = asyncio.get_event_loop()
-        final_state = await loop.run_in_executor(
-            None, workflow_app.invoke, initial_state
-        )
+        final_state = await loop.run_in_executor(None, _run_with_context)
 
         return final_state
     except Exception as e:
@@ -346,20 +346,23 @@ async def generate_brief_stream(request: BriefRequest):
             def stream_callback(message: str):
                 log_messages.append(message)
 
-            # Set the global log callback
-            from app.advanced_workflow import set_log_callback
-
-            set_log_callback(stream_callback)
+            # Set the log callback using ContextVars
+            from app.advanced_workflow import request_log_callback
 
             # Run the workflow in a thread pool (since it's synchronous)
             import asyncio
 
             loop = asyncio.get_event_loop()
 
+            def _run_with_context():
+                token = request_log_callback.set(stream_callback)
+                try:
+                    return workflow_app.invoke(initial_state)
+                finally:
+                    request_log_callback.reset(token)
+
             # Start the workflow execution
-            workflow_task = loop.run_in_executor(
-                None, workflow_app.invoke, initial_state
-            )
+            workflow_task = loop.run_in_executor(None, _run_with_context)
 
             # Stream logs in real-time while workflow is running
             last_log_index = 0
