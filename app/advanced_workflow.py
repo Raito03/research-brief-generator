@@ -16,6 +16,23 @@ from langchain_openai import ChatOpenAI  # ← Changed from ChatGoogleGenerative
 from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from app.llm_providers import (
+    CloudflareChatWrapper,
+    create_openrouter_llm,
+    model_name_ctx,
+    request_log_callback,
+    set_log_callback,
+    stream_log,
+)
+from app.parsers import (
+    calculate_tokens_from_words,
+    ensure_target_length,
+    fix_detailed_analysis_enhanced,
+    fix_executive_summary_enhanced,
+    fix_key_findings_enhanced,
+    parse_structured_response,
+    parse_synthesis_response_with_length,
+)
 from app.schemas import ResearchPlan, SourceSummary, FinalBrief, ResearchDepth
 from ddgs import DDGS
 from app.crawler import fetch_page_content
@@ -87,77 +104,6 @@ import threading
 #     performance_monitor = EmergencyFallback()
 #     count_tokens = lambda text, model_name="gpt-3.5-turbo": len(str(text).split()) * 1.3
 
-from langchain_core.language_models.chat_models import SimpleChatModel
-from langchain_core.messages import BaseMessage, AIMessage
-from langchain_core.outputs import ChatResult, ChatGeneration
-from pydantic import Field, ConfigDict
-from typing import Any, List, Optional
-
-
-class CloudflareChatWrapper(SimpleChatModel):
-    """
-    Wrapper to make CloudflareWorkersAI compatible with Chat interface
-    Properly configured for Pydantic v2
-    """
-
-    # ✅ Use ConfigDict for Pydantic v2
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,  # Allow CloudflareWorkersAI type
-        extra="allow",  # Allow extra fields
-    )
-
-    # ✅ Define fields properly
-    account_id: str
-    api_token: str
-    model_name: str = "@cf/meta/llama-3.1-8b-instruct"
-    temperature: float = 0.7
-    max_tokens: Optional[int] = None
-
-    # Internal LLM instance (initialized after __init__)
-    _llm: Any = None
-
-    def __init__(self, **data):
-        """Initialize the wrapper and create CloudflareWorkersAI instance"""
-        super().__init__(**data)
-
-        # Create the actual Cloudflare LLM after initialization
-        from langchain_community.llms.cloudflare_workersai import CloudflareWorkersAI
-
-        self._llm = CloudflareWorkersAI(
-            account_id=self.account_id,
-            api_token=self.api_token,
-            model=self.model_name,
-            streaming=False,
-        )
-
-    def _call(
-        self,
-        messages: List[BaseMessage],
-        stop: Optional[List[str]] = None,
-        run_manager: Optional[Any] = None,
-        **kwargs: Any,
-    ) -> str:
-        """
-        Convert messages to prompt and call CloudflareWorkersAI
-        """
-        # Convert messages to a single string prompt
-        prompt = "\n".join(
-            [
-                f"{'User' if msg.type == 'human' else 'Assistant'}: {msg.content}"
-                for msg in messages
-            ]
-        )
-
-        # Call the LLM (returns string)
-        response = self._llm.invoke(prompt)
-
-        return response
-
-    @property
-    def _llm_type(self) -> str:
-        """Return identifier for this model"""
-        return "cloudflare-chat-wrapper"
-
 
 class EmergencyFallback:
     def __getattr__(self, name):
@@ -190,179 +136,6 @@ class AdvancedResearchState(TypedDict):
     start_time: Optional[float]
     errors: Optional[List[str]]
     current_step: str
-
-
-# Global variables for streaming replaced with ContextVars for request scoping
-from contextvars import ContextVar
-from typing import Optional, Callable
-
-request_log_callback: ContextVar[Optional[Callable]] = ContextVar(
-    "request_log_callback", default=None
-)
-model_name_ctx: ContextVar[Optional[str]] = ContextVar("model_name_ctx", default=None)
-
-
-def set_log_callback(callback: Callable):
-    """Set callback function for streaming logs"""
-    request_log_callback.set(callback)
-
-
-def stream_log(message: str):
-    """Send log message to callback and print to console"""
-    print(message)  # Always print to console
-
-    cb = request_log_callback.get()
-    if cb:
-        try:
-            cb(message)
-        except:
-            pass  # Don't break workflow if callback fails
-
-
-model_name_ctx.get() = None
-
-
-def create_openrouter_llm(temperature: float = 0, max_tokens: int = 2000) -> ChatOpenAI:
-    """
-    Create LLM with multi-provider fallback strategy
-    Priority: Google AI Studio (Gemini) → Cloudflare Workers AI → OpenRouter
-    """
-    global model_name_ctx.get()
-    from google.api_core.exceptions import ResourceExhausted
-
-    # Provider configurations with their models
-    providers = [
-        {
-            "name": "Google Gemini",
-            "type": "google",
-            "model": "gemini-2.0-flash-lite",
-            "api_key_env": "GOOGLE_API_KEY",
-        },
-        {
-            "name": "Cloudflare Workers AI",
-            "type": "cloudflare",
-            "model": "@cf/meta/llama-3.1-8b-instruct",
-            "account_id_env": "CF_ACCOUNT_ID",
-            "api_token_env": "CF_API_TOKEN",
-        },
-        {
-            "name": "OpenRouter (DeepSeek)",
-            "type": "openrouter",
-            "model": "deepseek/deepseek-chat-v3.1:free",
-            "api_key_env": "OPENROUTER_API_KEY",
-        },
-    ]
-
-    for provider in providers:
-        try:
-            if provider["type"] == "google":
-                # Google AI Studio / Gemini
-                from langchain_google_genai import ChatGoogleGenerativeAI
-
-                api_key = os.getenv(provider["api_key_env"])
-                if not api_key:
-                    stream_log(f"⚠️  {provider['name']}: API key not found, skipping...")
-                    continue
-
-                llm = ChatGoogleGenerativeAI(
-                    model=provider["model"],
-                    google_api_key=api_key,
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
-                    max_retries=0,
-                    request_timeout=30,  # ✅ 30 second timeout
-                    streaming=True,
-                )
-
-                # Test the connection with quota error handling
-                try:
-                    test_response = llm.invoke([HumanMessage(content="test")])
-                    model_name_ctx.set(provider["name"])
-                    stream_log(
-                        f"✅ Successfully connected to {provider['name']} ({provider['model']})"
-                    )
-                    return llm
-                except ResourceExhausted as quota_error:
-                    # ✅ INSTANT SWITCH on quota exhaustion
-                    stream_log(
-                        f"❌ {provider['name']}: Quota exhausted - switching to next provider immediately"
-                    )
-                    stream_log(f"   Error: {str(quota_error)[:100]}...")
-                    continue  # Skip to next provider immediately
-
-            elif provider["type"] == "cloudflare":
-                # Cloudflare Workers AI
-
-                account_id = os.getenv(provider["account_id_env"])
-                api_token = os.getenv(provider["api_token_env"])
-
-                if not account_id or not api_token:
-                    stream_log(
-                        f"⚠️  {provider['name']}: Credentials not found, skipping..."
-                    )
-                    continue
-
-                llm = CloudflareChatWrapper(
-                    account_id=account_id,
-                    api_token=api_token,
-                    model=provider["model"],
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-
-                # Test the connection
-                test_response = llm.invoke([HumanMessage(content="test")])
-                model_name_ctx.set(provider["name"])
-                stream_log(
-                    f"✅ Successfully connected to {provider['name']} ({provider['model']})"
-                )
-                return llm
-
-            elif provider["type"] == "openrouter":
-                # OpenRouter fallback (your existing implementation)
-                from langchain_openai import ChatOpenAI
-
-                api_key = os.getenv(provider["api_key_env"])
-                if not api_key:
-                    stream_log(f"⚠️  {provider['name']}: API key not found, skipping...")
-                    continue
-
-                llm = ChatOpenAI(
-                    model=provider["model"],
-                    openai_api_key=api_key,
-                    openai_api_base="https://openrouter.ai/api/v1",
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    default_headers={
-                        "HTTP-Referer": "http://localhost:5000",
-                        "X-Title": "Research Brief Generator",
-                    },
-                    streaming=True,
-                )
-
-                model_name_ctx.set(provider["name"])
-                stream_log(
-                    f"✅ Successfully connected to {provider['name']} ({provider['model']})"
-                )
-                return llm
-
-        except ResourceExhausted as quota_error:
-            # Catch quota errors at the provider level
-            stream_log(
-                f"❌ {provider['name']}: Quota exhausted - switching immediately"
-            )
-            continue
-
-        except Exception as e:
-            stream_log(f"❌ Failed to connect to {provider['name']}: {str(e)}")
-            continue
-
-    # If all providers fail
-    stream_log("🚨 CRITICAL: All LLM providers failed or exhausted")
-    raise RuntimeError(
-        "❌ Failed to create LLM with all providers. "
-        "Please check your API keys: GOOGLE_API_KEY, CF_ACCOUNT_ID, CF_API_TOKEN, OPENROUTER_API_KEY"
-    )
 
 
 def planning_node(state: AdvancedResearchState):
@@ -1072,7 +845,9 @@ def get_optimal_lengths(model_name: str, user_requested_length: int = 300):
 def synthesis_node(state: AdvancedResearchState):
     """Create final brief using OpenRouter Models with dynamic length optimization"""
     node_start_time = time.time()
-    stream_log(f"🎯 SYNTHESIS: Creating final research brief with {model_name_ctx.get()}")
+    stream_log(
+        f"🎯 SYNTHESIS: Creating final research brief with {model_name_ctx.get()}"
+    )
 
     if not state.get("source_summaries"):
         # performance_monitor.record_node_performance("synthesis", time.time() - node_start_time, False)
@@ -1186,44 +961,12 @@ def synthesis_node(state: AdvancedResearchState):
         # stream_log(f"   📊 Output tokens: {output_tokens:,}")
         # stream_log(f"   📈 Generation rate: {output_tokens/synthesis_duration:.1f} tokens/sec")
 
-        # Enhanced parsing for longer content
-        executive_summary = ""
-        key_findings = []
-        detailed_analysis = ""
-
-        sections = content.split("\n\n")
-        current_section = None
-
-        for section in sections:
-            lines = section.split("\n")
-            for line in lines:
-                line = line.strip()
-
-                if "EXECUTIVE_SUMMARY:" in line:
-                    current_section = "executive"
-                    continue
-                elif "KEY_FINDINGS:" in line:
-                    current_section = "findings"
-                    continue
-                elif "DETAILED_ANALYSIS:" in line:
-                    current_section = "analysis"
-                    continue
-
-                if current_section == "executive" and line:
-                    executive_summary += line + " "
-                elif current_section == "findings" and line.startswith("-"):
-                    key_findings.append(line.lstrip("- ").strip())
-                elif current_section == "analysis" and line:
-                    detailed_analysis += line + " "
-
-        # Enhanced validation for longer content
-        executive_summary = fix_executive_summary_enhanced(
-            executive_summary.strip(), state["topic"], exec_summary_length
+        parsed_response = parse_structured_response(
+            content, state["topic"], exec_summary_length, detailed_analysis_length
         )
-        key_findings = fix_key_findings_enhanced(key_findings, state["topic"])
-        detailed_analysis = fix_detailed_analysis_enhanced(
-            detailed_analysis.strip(), state["topic"], detailed_analysis_length
-        )
+        executive_summary = parsed_response["executive_summary"]
+        key_findings = parsed_response["key_findings"]
+        detailed_analysis = parsed_response["detailed_analysis"]
 
         processing_time = time.time() - state.get("start_time", time.time())
 
@@ -1288,82 +1031,6 @@ def synthesis_node(state: AdvancedResearchState):
         }
 
 
-# Enhanced helper functions for longer content
-def fix_executive_summary_enhanced(
-    summary: str, topic: str, target_length: int = 300
-) -> str:
-    """Enhanced executive summary validation for longer content"""
-    current_words = len(summary.split()) if summary else 0
-
-    if current_words < max(50, target_length // 3):
-        # Create more comprehensive summary for longer targets
-        if target_length <= 300:
-            summary = f"This comprehensive research brief examines {topic} and presents key findings from multiple authoritative sources. The analysis reveals important insights, emerging trends, and practical implications relevant to the current landscape of {topic}."
-        else:
-            summary = f"This comprehensive research brief provides an in-depth examination of {topic}, drawing from multiple authoritative sources to present a detailed analysis of current developments, emerging trends, and future implications. The investigation reveals significant insights into the various dimensions of {topic}, including practical applications, challenges, and opportunities for stakeholders. The analysis encompasses both theoretical foundations and real-world implementations, offering a balanced perspective on the current state and trajectory of {topic} across different contexts and use cases."
-
-    # Adjust length to target
-    words = summary.split()
-    if len(words) > target_length * 1.1:  # Allow 10% tolerance
-        summary = " ".join(words[: int(target_length * 1.1)]) + "..."
-    elif len(words) < target_length * 0.8:  # If too short, expand
-        expansion = f" The research demonstrates the multifaceted nature of {topic} and its growing significance in contemporary applications. Key stakeholders should consider the strategic implications and emerging opportunities identified in this analysis."
-        summary = summary + expansion
-        words = summary.split()
-        if len(words) > target_length * 1.1:
-            summary = " ".join(words[: int(target_length * 1.1)]) + "..."
-
-    return summary
-
-
-def fix_key_findings_enhanced(findings: list, topic: str) -> list:
-    """Enhanced key findings validation with more detailed points"""
-    findings = [f.strip() for f in findings if f.strip() and len(f.strip()) > 10]
-
-    if len(findings) < 4:
-        enhanced_findings = [
-            f"Research identifies significant developments and innovations in {topic} across multiple domains",
-            f"Analysis reveals growing adoption and implementation of {topic} with measurable impact on stakeholders",
-            f"Multiple sources confirm the strategic importance of {topic} for future planning and development",
-            f"Investigation uncovers practical applications and use cases demonstrating real-world value of {topic}",
-            f"Expert analysis indicates emerging trends and opportunities related to {topic} implementation",
-            f"Evidence suggests {topic} will continue evolving with implications for policy and practice",
-        ]
-
-        for enhanced in enhanced_findings:
-            if len(findings) < 6:
-                findings.append(enhanced)
-
-    return findings[:8]  # Allow up to 8 findings for comprehensive briefs
-
-
-def fix_detailed_analysis_enhanced(
-    analysis: str, topic: str, target_length: int = 700
-) -> str:
-    """Enhanced detailed analysis validation for much longer content"""
-    current_words = len(analysis.split()) if analysis else 0
-
-    if current_words < max(100, target_length // 4):
-        # Create comprehensive analysis based on target length
-        if target_length <= 700:
-            analysis = f"The comprehensive research on {topic} reveals important trends and developments across multiple domains. Analysis of various authoritative sources indicates significant impact and growing adoption in contemporary applications. Key implications include strategic considerations for implementation, operational challenges, and future development opportunities. The findings suggest continued evolution and refinement in this area, with particular attention to scalability, sustainability, and stakeholder value creation. Expert perspectives highlight the multifaceted nature of {topic} and its relevance to current market dynamics and technological advancement."
-        else:
-            analysis = f"The comprehensive research investigation into {topic} reveals a complex landscape of developments, innovations, and applications that span multiple domains and stakeholder interests. Through systematic analysis of authoritative sources, academic research, and industry reports, several key themes emerge that collectively paint a picture of an evolving and increasingly significant area of focus. The research methodology involved detailed examination of primary and secondary sources, with particular attention to credibility, relevance, and contemporary applicability. Key findings indicate substantial growth and adoption across various sectors, with implementation strategies showing both promising results and notable challenges that require strategic consideration. The analysis reveals multiple dimensions of impact, including operational efficiency improvements, cost considerations, scalability factors, and long-term sustainability implications. Stakeholder perspectives vary significantly, with early adopters reporting positive outcomes while highlighting implementation complexities and resource requirements. Market dynamics demonstrate increasing investment and innovation, suggesting sustained growth potential and continued evolution of best practices. Technical considerations include infrastructure requirements, integration challenges, and the need for specialized expertise to maximize value creation. The research also identifies emerging trends that may influence future development, including regulatory considerations, technological convergence, and evolving user expectations. Strategic implications for organizations include the need for comprehensive planning, stakeholder engagement, and phased implementation approaches that balance innovation with risk management. The evidence suggests that {topic} will continue to evolve rapidly, requiring ongoing monitoring and adaptive strategies to maintain competitive advantage and operational effectiveness."
-
-    # Adjust length to target with tolerance
-    words = analysis.split()
-    if len(words) > target_length * 1.15:  # Allow 15% tolerance for detailed analysis
-        analysis = " ".join(words[: int(target_length * 1.15)]) + "..."
-    elif len(words) < target_length * 0.7:  # If significantly too short, expand
-        expansion = f" Future research directions should focus on longitudinal studies, comparative analysis across different implementation contexts, and the development of standardized metrics for measuring success and impact. The evolving nature of {topic} requires continuous monitoring of developments and adaptation of strategies to maintain effectiveness and relevance in changing environments."
-        analysis = analysis + expansion
-        words = analysis.split()
-        if len(words) > target_length * 1.15:
-            analysis = " ".join(words[: int(target_length * 1.15)]) + "..."
-
-    return analysis.strip()
-
-
 def create_fallback_brief_enhanced(
     state: AdvancedResearchState, sources: list, exec_length: int, analysis_length: int
 ) -> FinalBrief:
@@ -1401,110 +1068,6 @@ def create_fallback_brief_enhanced(
         sources=sources[:10],
         processing_time_seconds=round(processing_time, 2),
     )
-
-
-def ensure_target_length(
-    text: str, target_words: int, topic: str, tolerance: float = 0.2
-) -> str:
-    """
-    WHY: Ensure text meets target word count within acceptable tolerance
-    WHAT: Adjusts text length to match user's preferences
-    """
-    current_words = len(text.split())
-    min_words = int(target_words * (1 - tolerance))
-    max_words = int(target_words * (1 + tolerance))
-
-    if current_words < min_words:
-        # WHY: Text too short - expand with relevant content
-        # WHAT: Add contextual information to reach minimum length
-        expansion = f" This analysis of {topic} provides comprehensive insights into the current landscape and emerging trends in the field."
-        text = text + expansion
-
-        # WHY: Check if still too short after expansion
-        # WHAT: Add more generic but relevant content if needed
-        if len(text.split()) < min_words:
-            text = (
-                text
-                + f" The research indicates significant developments in {topic} with implications for future applications and policy considerations."
-            )
-
-    elif current_words > max_words:
-        # WHY: Text too long - truncate while maintaining meaning
-        # WHAT: Keep first portion and add proper ending
-        words = text.split()
-        truncated = " ".join(words[: max_words - 3])
-        text = truncated + "..."
-
-    return text
-
-
-def calculate_tokens_from_words(word_count: int) -> int:
-    """
-    WHY: Convert word count to approximate token count for LLM limits
-    WHAT: Uses rough conversion ratio of 1.3-1.5 tokens per word
-    """
-    # WHY: English text averages ~1.3 tokens per word
-    # WHAT: Add buffer for safety and include prompt tokens
-    return min(int(word_count * 1.5) + 500, 4000)  # WHY: Cap at 4000 tokens for safety
-
-
-def parse_synthesis_response_with_length(
-    content: str, topic: str, exec_target: int, analysis_target: int
-) -> dict:
-    """
-    WHY: Parse LLM response and validate section lengths
-    WHAT: Extracts sections and ensures they meet length targets
-    """
-    executive_summary = ""
-    key_findings = []
-    detailed_analysis = ""
-
-    sections = content.split("\n\n")
-    current_section = None
-
-    for section in sections:
-        lines = section.split("\n")
-        for line in lines:
-            line = line.strip()
-
-            if "EXECUTIVE_SUMMARY:" in line:
-                current_section = "executive"
-                continue
-            elif "KEY_FINDINGS:" in line:
-                current_section = "findings"
-                continue
-            elif "DETAILED_ANALYSIS:" in line:
-                current_section = "analysis"
-                continue
-
-            if current_section == "executive" and line:
-                executive_summary = line
-            elif current_section == "findings" and line.startswith("-"):
-                key_findings.append(line.lstrip("- ").strip())
-            elif current_section == "analysis" and line:
-                detailed_analysis += line + " "
-
-    # WHY: Validate and adjust lengths to meet targets
-    # WHAT: Ensures sections match user's length preferences
-    executive_summary = ensure_target_length(executive_summary, exec_target, topic)
-    detailed_analysis = ensure_target_length(
-        detailed_analysis.strip(), analysis_target, topic
-    )
-
-    # WHY: Ensure minimum findings count
-    # WHAT: Provides fallback findings if parsing failed
-    if len(key_findings) < 3:
-        key_findings = [
-            f"Research reveals significant developments in {topic}",
-            f"Multiple sources confirm growing importance of {topic}",
-            f"Analysis indicates practical implications for {topic} implementation",
-        ]
-
-    return {
-        "executive_summary": executive_summary,
-        "key_findings": key_findings[:6],  # WHY: Cap at 6 findings max
-        "detailed_analysis": detailed_analysis,
-    }
 
 
 # def create_compliant_fallback(result: dict, topic: str) -> SourceSummary:
