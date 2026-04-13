@@ -90,7 +90,7 @@ class TestBriefGeneration:
             "follow_up": False,
             "user_id": "test_user_123"
         }
-        with patch('api.create_advanced_workflow') as mock_workflow:
+        with patch('app.api.create_advanced_workflow') as mock_workflow:
             mock_app = MagicMock()
             mock_workflow.return_value = mock_app
             mock_app.invoke.return_value = {"final_brief": self.create_mock_brief(), "errors": None}
@@ -113,7 +113,7 @@ class TestBriefGeneration:
             "follow_up": False,
             "summary_length": 500
         }
-        with patch('api.create_advanced_workflow') as mock_workflow:
+        with patch('app.api.create_advanced_workflow') as mock_workflow:
             mock_app = MagicMock()
             mock_workflow.return_value = mock_app
             mock_app.invoke.return_value = {"final_brief": self.create_mock_brief(topic="renewable energy storage"), "errors": None}
@@ -132,7 +132,7 @@ class TestBriefGeneration:
             "follow_up": True,
             "summary_length": 300
         }
-        with patch('api.create_advanced_workflow') as mock_workflow:
+        with patch('app.api.create_advanced_workflow') as mock_workflow:
             mock_app = MagicMock()
             mock_workflow.return_value = mock_app
             mock_app.invoke.return_value = {"final_brief": self.create_mock_brief(follow_up=True), "errors": None}
@@ -189,7 +189,7 @@ class TestBriefGeneration:
             "follow_up": False,
             "user_id": "test_user"
         }
-        with patch('api.create_advanced_workflow') as mock_workflow:
+        with patch('app.api.create_advanced_workflow') as mock_workflow:
             mock_app = MagicMock()
             mock_workflow.return_value = mock_app
             mock_app.invoke.side_effect = Exception("Simulated internal error")
