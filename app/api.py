@@ -32,6 +32,9 @@ from app.llm_providers import (
 )
 from app.schemas import FinalBrief, BriefRequest
 
+# Import lifespan manager
+from app.lifespan import lifespan
+
 # WHY: FastAPI() creates our web application instance
 # WHAT: This is like opening a restaurant - you need a place to serve customers
 app = FastAPI(
@@ -40,6 +43,7 @@ app = FastAPI(
     version="1.0.0",  # WHY: Version tracking for updates
     docs_url="/docs",  # WHY: Auto-generated interactive documentation
     redoc_url="/redoc",  # WHY: Alternative documentation format
+    lifespan=lifespan,  # WHY: Graceful startup/shutdown
 )
 
 # Rate limiter setup
