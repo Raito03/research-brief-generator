@@ -19,6 +19,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from app.llm_providers import (
     CloudflareChatWrapper,
     create_openrouter_llm,
+    get_request_provider_config,
+    is_byok_request_active,
     model_name_ctx,
     request_log_callback,
     set_log_callback,
@@ -138,18 +140,44 @@ class AdvancedResearchState(TypedDict):
     current_step: str
 
 
+def build_byok_failure_message(stage: str) -> str:
+    provider_config = get_request_provider_config()
+    provider_name = provider_config.provider if provider_config else "selected"
+    return f"BYOK {provider_name} provider failed during {stage}. No fallback credentials were used."
+
+
+def handle_byok_failure(stage: str, exc: Exception) -> dict:
+    provider_error = str(exc).strip()
+    if provider_error and provider_error.startswith("BYOK "):
+        error_message = provider_error
+    elif provider_error:
+        error_message = f"{build_byok_failure_message(stage)} Reason: {provider_error}"
+    else:
+        error_message = build_byok_failure_message(stage)
+    stream_log(f"❌ {error_message}")
+    return {"errors": [error_message], "current_step": f"{stage}_failed"}
+
+
+
 def planning_node(state: AdvancedResearchState):
     """Generate structured research plan using OpenRouter Model with retries"""
     node_start_time = time.time()
 
-    # Create OpenRouter LLM
-    llm = create_openrouter_llm(temperature=0, max_tokens=1500)
+    try:
+        llm = create_openrouter_llm(temperature=0, max_tokens=1500)
+    except Exception as e:
+        if is_byok_request_active():
+            return handle_byok_failure("planning", e)
+        stream_log(f"❌ Planning failed: {str(e)}")
+        return {
+            "errors": [f"Planning error: {str(e)}"],
+            "current_step": "planning_failed",
+        }
 
     stream_log(
         f"📋 PLANNING: Creating research plan for '{state['topic']}' (using {model_name_ctx.get()})"
     )
 
-    # Create Pydantic parser
     parser = PydanticOutputParser(pydantic_object=ResearchPlan)
 
     # Create structured prompt
@@ -215,6 +243,9 @@ def planning_node(state: AdvancedResearchState):
     except Exception as e:
         node_duration = time.time() - node_start_time
         # performance_monitor.record_node_performance("planning", node_duration, False)
+
+        if is_byok_request_active():
+            return handle_byok_failure("planning", e)
 
         stream_log(f"❌ Planning failed: {str(e)}")
         return {
@@ -576,7 +607,16 @@ def summarization_node(state: AdvancedResearchState):
         int(target_length * 1.5), 2000
     )  # WHY: Safety limit to prevent excessive tokens
 
-    llm = create_openrouter_llm(temperature=0, max_tokens=max_tokens)
+    try:
+        llm = create_openrouter_llm(temperature=0, max_tokens=max_tokens)
+    except Exception as e:
+        if is_byok_request_active():
+            return handle_byok_failure('summarization', e)
+        stream_log(f'❌ Summarization setup failed: {str(e)}')
+        return {
+            'errors': [f'Summarization error: {str(e)}'],
+            'current_step': 'summarization_failed',
+        }
 
     source_summaries = []
     # total_input_tokens = 0
@@ -660,6 +700,8 @@ def summarization_node(state: AdvancedResearchState):
             # stream_log(f"     📊 Tokens: {input_tokens}→{output_tokens}")
 
         except Exception as e:
+            if is_byok_request_active():
+                return handle_byok_failure('summarization', e)
             stream_log(f"     ❌ Error: {str(e)}")
             fallback_summary = create_compliant_fallback(result, state["topic"])
             source_summaries.append(fallback_summary)
@@ -880,7 +922,16 @@ def synthesis_node(state: AdvancedResearchState):
 
     # Create LLM with appropriate token budget for optimized length
     max_tokens = min(int(optimized_total_length * 2.5), min(8000, model_context // 4))
-    llm = create_openrouter_llm(temperature=0.1, max_tokens=max_tokens)
+    try:
+        llm = create_openrouter_llm(temperature=0.1, max_tokens=max_tokens)
+    except Exception as e:
+        if is_byok_request_active():
+            return handle_byok_failure('synthesis', e)
+        stream_log(f'❌ Synthesis setup failed: {str(e)}')
+        return {
+            'errors': [f'Synthesis error: {str(e)}'],
+            'current_step': 'synthesis_failed',
+        }
 
     # Limit sources to top 8 (well under the 10 limit)
     top_sources = sorted(
@@ -1020,6 +1071,9 @@ def synthesis_node(state: AdvancedResearchState):
     except Exception as e:
         total_duration = time.time() - node_start_time
         # performance_monitor.record_node_performance("synthesis", total_duration, False)
+
+        if is_byok_request_active():
+            return handle_byok_failure('synthesis', e)
 
         stream_log(f"❌ Synthesis failed: {str(e)}")
         fallback_brief = create_fallback_brief_enhanced(

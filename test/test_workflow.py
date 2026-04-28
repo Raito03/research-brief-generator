@@ -7,9 +7,162 @@ Tests core functionality without external dependencies
 import os
 import sys
 import time
+import types
 
 # Add parent directory to path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+
+def install_test_dependency_stubs():
+    if "google.api_core.exceptions" not in sys.modules:
+        google_module = sys.modules.setdefault("google", types.ModuleType("google"))
+        api_core_module = types.ModuleType("google.api_core")
+        exceptions_module = types.ModuleType("google.api_core.exceptions")
+
+        class ResourceExhausted(Exception):
+            pass
+
+        exceptions_module.ResourceExhausted = ResourceExhausted
+        api_core_module.exceptions = exceptions_module
+        google_module.api_core = api_core_module
+        sys.modules["google.api_core"] = api_core_module
+        sys.modules["google.api_core.exceptions"] = exceptions_module
+
+    if "langgraph.graph" not in sys.modules:
+        langgraph_module = types.ModuleType("langgraph")
+        graph_module = types.ModuleType("langgraph.graph")
+
+        class StateGraph:
+            def __init__(self, state_type):
+                self.state_type = state_type
+                self.nodes = {}
+                self.edges = []
+                self.entry_point = None
+
+            def add_node(self, name, node):
+                self.nodes[name] = node
+
+            def set_entry_point(self, name):
+                self.entry_point = name
+
+            def add_edge(self, start, end):
+                self.edges.append((start, end))
+
+            def compile(self):
+                class CompiledWorkflow:
+                    def invoke(self, state):
+                        return state
+
+                return CompiledWorkflow()
+
+        graph_module.StateGraph = StateGraph
+        graph_module.END = "END"
+        langgraph_module.graph = graph_module
+        sys.modules["langgraph"] = langgraph_module
+        sys.modules["langgraph.graph"] = graph_module
+
+    if "langchain_openai" not in sys.modules:
+        langchain_openai_module = types.ModuleType("langchain_openai")
+
+        class ChatOpenAI:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def invoke(self, messages):
+                return types.SimpleNamespace(content="stubbed response")
+
+        langchain_openai_module.ChatOpenAI = ChatOpenAI
+        sys.modules["langchain_openai"] = langchain_openai_module
+
+    if "langchain_core.messages" not in sys.modules:
+        messages_module = types.ModuleType("langchain_core.messages")
+
+        class BaseMessage:
+            def __init__(self, content="", type="human"):
+                self.content = content
+                self.type = type
+
+        class HumanMessage(BaseMessage):
+            def __init__(self, content=""):
+                super().__init__(content=content, type="human")
+
+        messages_module.BaseMessage = BaseMessage
+        messages_module.HumanMessage = HumanMessage
+        sys.modules["langchain_core.messages"] = messages_module
+
+    if "langchain_core.language_models.chat_models" not in sys.modules:
+        chat_models_module = types.ModuleType("langchain_core.language_models.chat_models")
+
+        class SimpleChatModel:
+            def __init__(self, **kwargs):
+                for key, value in kwargs.items():
+                    setattr(self, key, value)
+
+            def invoke(self, messages):
+                result = self._call(messages)
+                return types.SimpleNamespace(content=result)
+
+        chat_models_module.SimpleChatModel = SimpleChatModel
+        sys.modules["langchain_core.language_models.chat_models"] = chat_models_module
+
+    if "langchain_core.output_parsers" not in sys.modules:
+        output_parsers_module = types.ModuleType("langchain_core.output_parsers")
+
+        class PydanticOutputParser:
+            def __init__(self, pydantic_object):
+                self.pydantic_object = pydantic_object
+
+            def get_format_instructions(self):
+                return "stubbed format"
+
+            def __ror__(self, other):
+                return self
+
+        output_parsers_module.PydanticOutputParser = PydanticOutputParser
+        sys.modules["langchain_core.output_parsers"] = output_parsers_module
+
+    if "langchain_core.prompts" not in sys.modules:
+        prompts_module = types.ModuleType("langchain_core.prompts")
+
+        class _FakeChain:
+            def __or__(self, other):
+                return self
+
+            def invoke(self, values):
+                return values
+
+        class ChatPromptTemplate:
+            @classmethod
+            def from_messages(cls, messages):
+                return _FakeChain()
+
+        prompts_module.ChatPromptTemplate = ChatPromptTemplate
+        sys.modules["langchain_core.prompts"] = prompts_module
+
+    if "ddgs" not in sys.modules:
+        ddgs_module = types.ModuleType("ddgs")
+
+        class DDGS:
+            def text(self, **kwargs):
+                return []
+
+        ddgs_module.DDGS = DDGS
+        sys.modules["ddgs"] = ddgs_module
+
+    if "crawl4ai" not in sys.modules:
+        crawl4ai_module = types.ModuleType("crawl4ai")
+
+        class AsyncWebCrawler:
+            pass
+
+        crawl4ai_module.AsyncWebCrawler = AsyncWebCrawler
+        sys.modules["crawl4ai"] = crawl4ai_module
+
+
+install_test_dependency_stubs()
+
+import pytest
+from google.api_core.exceptions import ResourceExhausted
 
 
 def test_imports():
@@ -301,3 +454,234 @@ if __name__ == "__main__":
     else:
         success = run_all_tests()
         sys.exit(0 if success else 1)
+
+
+def _build_source_summary():
+    from app.schemas import SourceSummary
+
+    return SourceSummary(
+        url="https://example.com/source",
+        title="Test Source",
+        summary="This source contains enough detail about the research topic to satisfy validation requirements and support synthesis behavior in tests.",
+        key_points=["Point 1", "Point 2"],
+        relevance_score=0.9,
+        credibility_score=0.8,
+        source_type="web",
+    )
+
+
+def _build_research_plan():
+    from app.schemas import ResearchPlan
+
+    return ResearchPlan(
+        topic="test topic",
+        research_questions=["Question 1?", "Question 2?"],
+        search_queries=["query one", "query two", "query three"],
+        expected_sources=3,
+        estimated_time_minutes=10,
+        depth_level="basic",
+    )
+
+
+def _build_synthesis_state():
+    return {
+        "topic": "test topic",
+        "depth": 3,
+        "user_id": "test_user",
+        "follow_up": False,
+        "summary_length": 300,
+        "research_plan": _build_research_plan(),
+        "raw_search_results": None,
+        "source_summaries": [_build_source_summary(), _build_source_summary()],
+        "final_brief": None,
+        "start_time": time.time(),
+        "errors": None,
+        "current_step": "synthesis",
+    }
+
+
+def test_create_openrouter_llm_uses_selected_byok_provider_without_fallback(monkeypatch):
+    from app.llm_providers import create_openrouter_llm, set_request_provider_config, reset_request_provider_config
+    from app.schemas import BYOKConfig, BYOKCredentials
+
+    calls = []
+
+    class FakeGoogleLLM:
+        def __init__(self, **kwargs):
+            calls.append(kwargs)
+            self.kwargs = kwargs
+
+        def invoke(self, messages):
+            return types.SimpleNamespace(content="ok")
+
+    fake_google_module = types.ModuleType("langchain_google_genai")
+    fake_google_module.ChatGoogleGenerativeAI = FakeGoogleLLM
+    monkeypatch.setitem(sys.modules, "langchain_google_genai", fake_google_module)
+    monkeypatch.setattr("app.llm_providers.ChatOpenAI", lambda **kwargs: (_ for _ in ()).throw(AssertionError("OpenRouter fallback should not be used for BYOK")))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "app-managed-openrouter-key")
+
+    token = set_request_provider_config(
+        BYOKConfig(
+            enabled=True,
+            provider="google",
+            credentials=BYOKCredentials(api_key="user-google-key"),
+        )
+    )
+    try:
+        llm = create_openrouter_llm()
+    finally:
+        reset_request_provider_config(token)
+
+    assert isinstance(llm, FakeGoogleLLM)
+    assert len(calls) == 1
+    assert calls[0]["google_api_key"] == "user-google-key"
+
+
+def test_create_openrouter_llm_byok_failure_does_not_fallback(monkeypatch):
+    from app.llm_providers import BYOKProviderError, create_openrouter_llm, set_request_provider_config, reset_request_provider_config
+    from app.schemas import BYOKConfig, BYOKCredentials
+
+    class FailingGoogleLLM:
+        def __init__(self, **kwargs):
+            pass
+
+        def invoke(self, messages):
+            raise RuntimeError("invalid google key")
+
+    fake_google_module = types.ModuleType("langchain_google_genai")
+    fake_google_module.ChatGoogleGenerativeAI = FailingGoogleLLM
+    monkeypatch.setitem(sys.modules, "langchain_google_genai", fake_google_module)
+    monkeypatch.setattr("app.llm_providers.ChatOpenAI", lambda **kwargs: (_ for _ in ()).throw(AssertionError("Fallback should not continue to OpenRouter")))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "app-managed-openrouter-key")
+
+    token = set_request_provider_config(
+        BYOKConfig(
+            enabled=True,
+            provider="google",
+            credentials=BYOKCredentials(api_key="user-google-key"),
+        )
+    )
+    try:
+        with pytest.raises(BYOKProviderError):
+            create_openrouter_llm()
+    finally:
+        reset_request_provider_config(token)
+
+
+def test_create_openrouter_llm_preserves_non_byok_fallback(monkeypatch):
+    from app.llm_providers import create_openrouter_llm
+
+    class QuotaGoogleLLM:
+        def __init__(self, **kwargs):
+            pass
+
+        def invoke(self, messages):
+            raise ResourceExhausted("quota exhausted")
+
+    class FakeOpenRouterLLM:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    fake_google_module = types.ModuleType("langchain_google_genai")
+    fake_google_module.ChatGoogleGenerativeAI = QuotaGoogleLLM
+    monkeypatch.setitem(sys.modules, "langchain_google_genai", fake_google_module)
+    monkeypatch.delenv("CF_ACCOUNT_ID", raising=False)
+    monkeypatch.delenv("CF_API_TOKEN", raising=False)
+    monkeypatch.setenv("GOOGLE_API_KEY", "app-google-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "app-openrouter-key")
+    monkeypatch.setattr("app.llm_providers.ChatOpenAI", FakeOpenRouterLLM)
+
+    llm = create_openrouter_llm()
+
+    assert isinstance(llm, FakeOpenRouterLLM)
+    assert llm.kwargs["openai_api_key"] == "app-openrouter-key"
+
+
+def test_synthesis_node_hard_fails_for_byok_provider_errors(monkeypatch):
+    from app.advanced_workflow import synthesis_node
+    from app.llm_providers import set_request_provider_config, reset_request_provider_config
+    from app.schemas import BYOKConfig, BYOKCredentials
+
+    class FailingLLM:
+        def invoke(self, messages):
+            raise RuntimeError("quota exceeded")
+
+    monkeypatch.setattr("app.advanced_workflow.create_openrouter_llm", lambda **kwargs: FailingLLM())
+
+    token = set_request_provider_config(
+        BYOKConfig(
+            enabled=True,
+            provider="google",
+            credentials=BYOKCredentials(api_key="user-google-key"),
+        )
+    )
+    try:
+        result = synthesis_node(_build_synthesis_state())
+    finally:
+        reset_request_provider_config(token)
+
+    assert result["current_step"] == "synthesis_failed"
+    assert result["errors"]
+    assert "final_brief" not in result
+
+
+def test_synthesis_node_preserves_fallback_for_non_byok_errors(monkeypatch):
+    from app.advanced_workflow import synthesis_node
+
+    class FailingLLM:
+        def invoke(self, messages):
+            raise RuntimeError("quota exceeded")
+
+    monkeypatch.setattr("app.advanced_workflow.create_openrouter_llm", lambda **kwargs: FailingLLM())
+
+    result = synthesis_node(_build_synthesis_state())
+
+    assert result["current_step"] == "completed_with_fallback"
+    assert result["final_brief"] is not None
+
+
+def test_planning_node_preserves_byok_provider_failure_reason(monkeypatch):
+    from app.advanced_workflow import planning_node
+    from app.llm_providers import BYOKProviderError, reset_request_provider_config, set_request_provider_config
+    from app.schemas import BYOKConfig, BYOKCredentials
+
+    monkeypatch.setattr(
+        "app.advanced_workflow.create_openrouter_llm",
+        lambda **kwargs: (_ for _ in ()).throw(
+            BYOKProviderError(
+                "BYOK google provider failed quota validation. No fallback credentials were used."
+            )
+        ),
+    )
+
+    token = set_request_provider_config(
+        BYOKConfig(
+            enabled=True,
+            provider="google",
+            credentials=BYOKCredentials(api_key="user-google-key"),
+        )
+    )
+    try:
+        result = planning_node(
+            {
+                "topic": "test topic",
+                "depth": 3,
+                "user_id": "test_user",
+                "follow_up": False,
+                "summary_length": 300,
+                "research_plan": None,
+                "raw_search_results": None,
+                "source_summaries": None,
+                "final_brief": None,
+                "start_time": time.time(),
+                "errors": None,
+                "current_step": "planning",
+            }
+        )
+    finally:
+        reset_request_provider_config(token)
+
+    assert result["current_step"] == "planning_failed"
+    assert result["errors"]
+    assert "quota validation" in result["errors"][0]
+    assert "No fallback credentials were used." in result["errors"][0]

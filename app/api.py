@@ -4,7 +4,7 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -17,8 +17,9 @@ import asyncio
 import json
 
 # Import your existing workflow
-from app.advanced_workflow import create_advanced_workflow, AdvancedResearchState
-from app.schemas import FinalBrief
+from app.advanced_workflow import create_advanced_workflow
+from app.llm_providers import request_log_callback, reset_request_provider_config, set_request_provider_config
+from app.schemas import FinalBrief, BriefRequest
 
 # WHY: FastAPI() creates our web application instance
 # WHAT: This is like opening a restaurant - you need a place to serve customers
@@ -41,32 +42,6 @@ app.add_middleware(
     allow_methods=["*"],  # WHY: Allows GET, POST, PUT, DELETE etc.
     allow_headers=["*"],  # WHY: Allows any HTTP headers
 )
-
-
-# WHY: We define request/response schemas so users know what to send/expect
-# WHAT: This is like a menu at a restaurant - shows what you can order and what you get
-class BriefRequest(BaseModel):
-    """
-    WHY: This defines what data users must send to create a research brief
-    WHAT: Pydantic automatically validates incoming requests against this schema
-    """
-
-    topic: str = Field(
-        ..., min_length=5, max_length=200, description="Research topic to investigate"
-    )
-    depth: int = Field(
-        default=3, ge=1, le=5, description="Research depth (1=basic, 5=comprehensive)"
-    )
-    follow_up: bool = Field(
-        default=False, description="Is this a follow-up to previous research?"
-    )
-    user_id: str = Field(
-        ..., min_length=1, description="Unique identifier for the user"
-    )
-    # 🎯 THIS LINE MUST BE PRESENT:
-    summary_length: Optional[int] = Field(
-        default=300, ge=50, le=2000, description="Desired summary length in words"
-    )
 
 
 class BriefResponse(BaseModel):
@@ -137,7 +112,7 @@ async def health_check():
 # WHY: POST endpoints are for creating/submitting new data (like filling out a form)
 # WHAT: This is the main endpoint where users request research briefs
 @app.post("/brief", response_model=BriefResponse)
-async def generate_brief(request: BriefRequest, background_tasks: BackgroundTasks):
+async def generate_brief(request: BriefRequest):
     """
     Generate a research brief - the main function of your API
 
@@ -193,9 +168,7 @@ async def generate_brief(request: BriefRequest, background_tasks: BackgroundTask
         # WHY: Execute the actual research workflow
         # WHAT: This runs your entire LangGraph pipeline (search, summarize, synthesize)
         # HOW: The workflow processes through all nodes until completion
-        import asyncio
-
-        final_state = await asyncio.to_thread(workflow_app.invoke, initial_state)
+        final_state = await run_workflow_async(workflow_app, initial_state, byok=request.byok)
 
         # WHY: Calculate processing time for performance monitoring
         # WHAT: Like timing how long it takes to prepare a dish
@@ -273,22 +246,23 @@ async def generate_brief(request: BriefRequest, background_tasks: BackgroundTask
         )
 
 
-async def run_workflow_async(workflow_app, initial_state, log_callback):
-    """Run workflow in async context with logging callback"""
+async def run_workflow_async(workflow_app, initial_state, byok=None, log_callback=None):
+    """Run workflow in async context with request-scoped logging and provider config."""
     try:
-        from app.advanced_workflow import request_log_callback
-
         def _run_with_context():
-            token = request_log_callback.set(log_callback)
+            log_token = None
+            active_byok = byok if byok and byok.enabled else None
+            provider_token = set_request_provider_config(active_byok)
+            if log_callback is not None:
+                log_token = request_log_callback.set(log_callback)
             try:
                 return workflow_app.invoke(initial_state)
             finally:
-                request_log_callback.reset(token)
+                reset_request_provider_config(provider_token)
+                if log_token is not None:
+                    request_log_callback.reset(log_token)
 
-        loop = asyncio.get_event_loop()
-        final_state = await loop.run_in_executor(None, _run_with_context)
-
-        return final_state
+        return await asyncio.to_thread(_run_with_context)
     except Exception as e:
         raise Exception(f"Workflow execution error: {str(e)}")
 
@@ -296,10 +270,10 @@ async def run_workflow_async(workflow_app, initial_state, log_callback):
 class DateTimeEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles datetime objects"""
 
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        return super().default(obj)
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+        return super().default(o)
 
 
 # Add this new endpoint after your existing endpoints
@@ -346,23 +320,12 @@ async def generate_brief_stream(request: BriefRequest):
             def stream_callback(message: str):
                 log_messages.append(message)
 
-            # Set the log callback using ContextVars
-            from app.advanced_workflow import request_log_callback
-
-            # Run the workflow in a thread pool (since it's synchronous)
-            import asyncio
-
-            loop = asyncio.get_event_loop()
-
-            def _run_with_context():
-                token = request_log_callback.set(stream_callback)
-                try:
-                    return workflow_app.invoke(initial_state)
-                finally:
-                    request_log_callback.reset(token)
-
-            # Start the workflow execution
-            workflow_task = loop.run_in_executor(None, _run_with_context)
+            # Start the workflow execution with request-scoped log and provider context
+            workflow_task = asyncio.create_task(
+                run_workflow_async(
+                    workflow_app, initial_state, byok=request.byok, log_callback=stream_callback
+                )
+            )
 
             # Stream logs in real-time while workflow is running
             last_log_index = 0
