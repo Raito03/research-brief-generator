@@ -1,5 +1,6 @@
 # Graceful shutdown and lifespan management
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 import logging
@@ -7,6 +8,21 @@ import logging
 from fastapi import FastAPI
 
 logger = logging.getLogger("api")
+
+# Sentry error tracking - minimal setup
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            traces_sample_rate=0.1,  # 10% of transactions
+            environment=os.getenv("RAILWAY_ENVIRONMENT", "production"),
+        )
+        logger.info("Sentry error tracking enabled")
+    except Exception as e:
+        logger.warning(f"Sentry initialization failed: {e}")
 
 
 @asynccontextmanager
