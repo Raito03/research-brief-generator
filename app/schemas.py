@@ -1,5 +1,5 @@
 # schemas.py - Your Data Models
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import List, Optional, Literal
 from datetime import datetime
 from enum import Enum
@@ -58,6 +58,52 @@ class ContextSummary(BaseModel):
     research_preferences: Optional[str] = None
     last_updated: datetime
 
+
+class BYOKCredentials(BaseModel):
+    api_key: Optional[str] = None
+    account_id: Optional[str] = None
+    api_token: Optional[str] = None
+
+    @field_validator("api_key", "account_id", "api_token")
+    @classmethod
+    def normalize_optional_secrets(cls, value):
+        if value is None:
+            return value
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class BYOKConfig(BaseModel):
+    enabled: bool = Field(default=False, description="Whether BYOK is enabled for this request")
+    provider: Literal["google", "cloudflare", "openrouter"] = Field(
+        ..., description="Selected BYOK provider"
+    )
+    credentials: BYOKCredentials = Field(
+        ..., description="Provider credentials for the selected BYOK provider"
+    )
+
+    @model_validator(mode="after")
+    def validate_enabled_configuration(self):
+        if not self.enabled:
+            return self
+
+        if not self.provider:
+            raise ValueError("provider is required when byok.enabled is true")
+
+        if not self.credentials:
+            raise ValueError("credentials is required when byok.enabled is true")
+
+        if self.provider in {"google", "openrouter"} and not self.credentials.api_key:
+            raise ValueError(f"api_key is required for BYOK provider '{self.provider}'")
+
+        if self.provider == "cloudflare" and (
+            not self.credentials.account_id or not self.credentials.api_token
+        ):
+            raise ValueError("account_id and api_token are required for BYOK provider 'cloudflare'")
+
+        return self
+
+
 class BriefRequest(BaseModel):
     """Request schema for generating research briefs"""
     topic: str = Field(..., min_length=5, max_length=200, description="Research topic to investigate")
@@ -67,6 +113,7 @@ class BriefRequest(BaseModel):
     
     # 🎯 THIS LINE MUST BE PRESENT:
     summary_length: Optional[int] = Field(default=300, ge=50, le=2000, description="Desired summary length in words")
+    byok: Optional[BYOKConfig] = Field(default=None, description="Optional request-scoped BYOK provider configuration")
 
 class FinalBrief(BaseModel):
     """Schema for the complete research brief - YOUR ASSIGNMENT OUTPUT"""

@@ -1,9 +1,24 @@
+export type ByokProvider = "google" | "cloudflare" | "openrouter";
+
+export interface ByokCredentials {
+  api_key?: string;
+  account_id?: string;
+  api_token?: string;
+}
+
+export interface ByokEnvelope {
+  enabled: boolean;
+  provider: ByokProvider;
+  credentials: ByokCredentials;
+}
+
 export interface BriefRequest {
   topic: string;
   depth: number;
   user_id: string;
   summary_length: number;
   follow_up: boolean;
+  byok?: ByokEnvelope;
 }
 
 export interface SourceSummary {
@@ -32,16 +47,17 @@ export interface FinalBrief {
 }
 
 export interface StreamMessage {
-  type: 'log' | 'result' | 'complete' | 'error';
+  type: "log" | "result" | "complete" | "error";
   message?: string;
   data?: FinalBrief;
   success?: boolean;
 }
 
-export type AppState = 'idle' | 'collecting' | 'loading' | 'result' | 'error';
+export type AppState = "idle" | "collecting" | "loading" | "result" | "error";
 
 export interface FormData {
   topic: string;
   depth: number;
   summaryLength: number;
+  byok: ByokEnvelope;
 }

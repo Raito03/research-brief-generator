@@ -4,3 +4,15 @@ __pycache__/
 .pytest_cache/
 node_modules/
 .next/
+.agent/
+.opencode/
+.venv_depcheck/
+docs/superpowers/plans/
+frontend/testsprite_tests/
+testsprite_tests/
+frontend/tsconfig.tsbuildinfo
+*.whl
+pip-resolution-no-ddgs-report.json
+mempalace.yaml
+opencode.json
+entities.json
