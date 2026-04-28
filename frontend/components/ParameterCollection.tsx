@@ -123,10 +123,10 @@ export function ParameterCollection({
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-6"
       >
-        <h1 className="text-5xl md:text-6xl font-bold text-cadet-grey mb-4 font-serif tracking-tight">
+        <h1 className="text-5xl md:text-6xl font-bold text-[#1A1A1A] mb-4 font-serif tracking-tight">
           Research Assistant
         </h1>
-        <p className="text-cool-grey text-lg font-sans">
+        <p className="text-[#6B6B6B] text-lg font-sans">
           Deep content extraction and editorial synthesis.
         </p>
       </motion.div>
@@ -142,7 +142,7 @@ export function ParameterCollection({
               transition={{ duration: 0.3 }}
               className="space-y-6"
             >
-              <h2 className="text-2xl font-semibold text-cadet-grey text-center mb-6 font-serif">
+              <h2 className="text-2xl font-medium text-[#1A1A1A] text-center mb-6 font-serif">
                 What would you like to research?
               </h2>
 
@@ -153,11 +153,11 @@ export function ParameterCollection({
                   onChange={(e) => setTopicInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleTopicSubmit()}
                   placeholder="e.g., Artificial Intelligence"
-                  className="focus:outline-none focus:ring-0 focus:border-transparent focus:ring-0 w-full bg-transparent border-b-2 border-ube/30 px-2 py-4 text-cadet-grey placeholder-cool-grey/50 transition-all text-center text-2xl font-serif"
+                  className="focus:outline-none focus:ring-0 focus:border-transparent focus:ring-0 w-full bg-transparent border-b-2 border-[#E8E5DD] px-2 py-4 text-[#1A1A1A] placeholder-[#9A9A9A]/50 transition-all text-center text-2xl font-serif"
                   autoFocus
                 />
 
-                <p className="text-sm text-cool-grey/60 text-center mt-4 font-sans">
+                <p className="text-sm text-[#9A9A9A] text-center mt-4 font-sans">
                   {topicInput.length}/200 characters (min 5)
                 </p>
               </div>
@@ -169,7 +169,7 @@ export function ParameterCollection({
                   disabled={topicInput.trim().length < 5}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-40 mx-auto block bg-ube text-chinese-black font-semibold py-3 rounded-none disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:bg-ube/90 font-sans tracking-wide uppercase text-sm"
+                  className="w-40 mx-auto block bg-[#D4A853] text-white font-medium py-3 rounded-none disabled:opacity-40 disabled:cursor-not-allowed transition-all hover:bg-[#B8923D] font-sans tracking-wide uppercase text-sm"
                 >
                   Continue
                 </motion.button>
@@ -189,13 +189,13 @@ export function ParameterCollection({
               <button
                 type="button"
                 onClick={handleBack}
-                className="text-ube hover:text-ube/80 transition-colors text-sm font-medium font-sans uppercase tracking-wider"
+                className="text-[#2D7D8A] hover:text-[#2D7D8A]/80 transition-colors text-sm font-medium font-sans uppercase tracking-wider"
               >
                 ← Back
               </button>
 
               <div className="text-center">
-                <h2 className="text-cadet-grey text-2xl mb-8 font-serif">
+                <h2 className="text-[#1A1A1A] text-2xl mb-8 font-serif">
                   How deep should the research be?
                 </h2>
 
@@ -209,20 +209,20 @@ export function ParameterCollection({
                       whileTap={{ scale: 0.98 }}
                       className={`w-full text-left px-6 py-4 transition-all border-l-4 ${
                         formData.depth === option.value
-                          ? "border-ube bg-ube/5"
-                          : "border-transparent hover:border-ube/40 hover:bg-ube/5"
+                          ? "border-[#D4A853] bg-[#D4A853]/5"
+                          : "border-transparent hover:border-[#D4A853]/40 hover:bg-[#D4A853]/5"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0 space-y-1 pr-2">
-                          <div className="font-semibold text-cadet-grey text-xl font-serif">
+                          <div className="font-medium text-[#1A1A1A] text-xl font-serif">
                             {option.label}
                           </div>
-                          <div className="text-cool-grey/80 text-sm font-sans">
+                          <div className="text-[#6B6B6B]/80 text-sm font-sans">
                             {option.desc}
                           </div>
                         </div>
-                        <div className="shrink-0 text-ube font-bold text-2xl font-serif">
+                        <div className="shrink-0 text-[#D4A853] font-medium text-2xl font-serif">
                           {option.value}
                         </div>
                       </div>
@@ -245,13 +245,13 @@ export function ParameterCollection({
               <button
                 type="button"
                 onClick={handleBack}
-                className="text-ube hover:text-ube/80 transition-colors text-sm font-medium font-sans uppercase tracking-wider mb-4"
+                className="text-[#2D7D8A] hover:text-[#2D7D8A]/80 transition-colors text-sm font-medium font-sans uppercase tracking-wider mb-4"
               >
                 ← Back
               </button>
 
               <div className="text-center">
-                <h2 className="text-cadet-grey text-2xl mb-8 font-serif">
+                <h2 className="text-[#1A1A1A] text-2xl mb-8 font-serif">
                   Preferred summary length?
                 </h2>
 
@@ -265,14 +265,14 @@ export function ParameterCollection({
                       whileTap={{ scale: 0.98 }}
                       className={`p-6 text-left transition-all border-l-4 ${
                         formData.summaryLength === option.value
-                          ? "border-ube bg-ube/5"
-                          : "border-transparent hover:border-ube/40 hover:bg-ube/5"
+                          ? "border-[#D4A853] bg-[#D4A853]/5"
+                          : "border-transparent hover:border-[#D4A853]/40 hover:bg-[#D4A853]/5"
                       }`}
                     >
-                      <div className="text-cadet-grey font-semibold mb-2 text-xl font-serif">
+                      <div className="text-[#1A1A1A] font-medium mb-2 text-xl font-serif">
                         {option.label}
                       </div>
-                      <div className="text-cool-grey text-sm font-sans">
+                      <div className="text-[#6B6B6B] text-sm font-sans">
                         {option.desc}
                       </div>
                     </motion.button>
@@ -294,36 +294,36 @@ export function ParameterCollection({
               <button
                 type="button"
                 onClick={handleBack}
-                className="text-ube hover:text-ube/80 transition-colors text-sm font-medium font-sans uppercase tracking-wider mb-4"
+                className="text-[#2D7D8A] hover:text-[#2D7D8A]/80 transition-colors text-sm font-medium font-sans uppercase tracking-wider mb-4"
               >
                 ← Back
               </button>
 
               <div className="text-center">
-                <h2 className="text-cadet-grey text-2xl mb-8 font-serif">
+                <h2 className="text-[#1A1A1A] text-2xl mb-8 font-serif">
                   Ready to generate your research brief
                 </h2>
 
                 <div className="space-y-4 mb-6 text-left max-w-md mx-auto">
-                  <div className="flex justify-between items-center py-4 border-b border-ube/20">
-                    <span className="text-cool-grey font-sans">Topic</span>
-                    <span className="text-cadet-grey font-medium font-serif text-lg">
+                  <div className="flex justify-between items-center py-4 border-b border-[#E8E5DD]">
+                    <span className="text-[#6B6B6B] font-sans">Topic</span>
+                    <span className="text-[#1A1A1A] font-medium font-serif text-lg">
                       {formData.topic}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center py-4 border-b border-ube/20">
-                    <span className="text-cool-grey font-sans">
+                  <div className="flex justify-between items-center py-4 border-b border-[#E8E5DD]">
+                    <span className="text-[#6B6B6B] font-sans">
                       Research Depth
                     </span>
-                    <span className="text-cadet-grey font-medium font-serif text-lg">
+                    <span className="text-[#1A1A1A] font-medium font-serif text-lg">
                       Level {formData.depth}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center py-4 border-b border-ube/20">
-                    <span className="text-cool-grey font-sans">
+                  <div className="flex justify-between items-center py-4 border-b border-[#E8E5DD]">
+                    <span className="text-[#6B6B6B] font-sans">
                       Summary Length
                     </span>
-                    <span className="text-cadet-grey font-medium font-serif text-lg">
+                    <span className="text-[#1A1A1A] font-medium font-serif text-lg">
                       ~{formData.summaryLength} words
                     </span>
                   </div>
@@ -334,24 +334,24 @@ export function ParameterCollection({
                     type="button"
                     onClick={() => setShowAdvancedOptions((open) => !open)}
                     aria-expanded={showAdvancedOptions}
-                    className="w-full flex items-center justify-between border-t border-b border-ube/15 py-4 text-cadet-grey transition-colors hover:text-ube"
+                    className="w-full flex items-center justify-between border-t border-b border-[#E8E5DD] py-4 text-[#1A1A1A] transition-colors hover:text-[#2D7D8A]"
                   >
                     <span className="font-serif text-lg">
                       Advanced request options
                     </span>
-                    <span className="text-xs font-sans uppercase tracking-[0.2em] text-cool-grey">
+                    <span className="text-xs font-sans uppercase tracking-[0.2em] text-[#6B6B6B]">
                       {showAdvancedOptions ? "Hide" : "Show"}
                     </span>
                   </button>
 
                   {showAdvancedOptions && (
-                    <div className="border-b border-ube/15 px-1 py-5 space-y-5">
-                      <p className="text-sm leading-6 text-cool-grey font-sans">
+                    <div className="border-b border-[#E8E5DD] px-1 py-5 space-y-5">
+                      <p className="text-sm leading-6 text-[#6B6B6B] font-sans">
                         Use a provider credential for this request only. Nothing
                         is stored beyond the current brief.
                       </p>
 
-                      <label className="flex items-center justify-between gap-4 text-cadet-grey cursor-pointer">
+                      <label className="flex items-center justify-between gap-4 text-[#1A1A1A] cursor-pointer">
                         <span className="font-serif text-lg">
                           Bring your own key
                         </span>
@@ -362,16 +362,16 @@ export function ParameterCollection({
                           onChange={(e) =>
                             handleByokEnabledChange(e.target.checked)
                           }
-                          className="h-4 w-4 accent-ube"
+                          className="h-4 w-4 accent-[#D4A853]"
                         />
                       </label>
 
                       {byok.enabled && (
-                        <div className="space-y-4 border-l border-ube/20 pl-4">
+                        <div className="space-y-4 border-l border-[#E8E5DD] pl-4">
                           <div className="space-y-2">
                             <label
                               htmlFor="byok-provider"
-                              className="block text-xs font-sans uppercase tracking-[0.2em] text-cool-grey"
+                              className="block text-xs font-sans uppercase tracking-[0.2em] text-[#6B6B6B]"
                             >
                               Provider
                             </label>
@@ -384,7 +384,7 @@ export function ParameterCollection({
                                   e.target.value as ByokEnvelope["provider"],
                                 )
                               }
-                              className="w-full bg-transparent border-b border-ube/30 px-0 py-3 text-cadet-grey font-serif text-lg focus:outline-none"
+                              className="w-full bg-transparent border-b border-[#E8E5DD] px-0 py-3 text-[#1A1A1A] font-serif text-lg focus:outline-none"
                             >
                               <option value="google">Google Gemini</option>
                               <option value="cloudflare">
@@ -399,7 +399,7 @@ export function ParameterCollection({
                               <div className="space-y-2">
                                 <label
                                   htmlFor="byok-account-id"
-                                  className="block text-xs font-sans uppercase tracking-[0.2em] text-cool-grey"
+                                  className="block text-xs font-sans uppercase tracking-[0.2em] text-[#6B6B6B]"
                                 >
                                   Account ID
                                 </label>
@@ -414,14 +414,14 @@ export function ParameterCollection({
                                       e.target.value,
                                     )
                                   }
-                                  className="w-full bg-transparent border-b border-ube/30 px-0 py-3 text-cadet-grey font-serif text-lg focus:outline-none"
+                                  className="w-full bg-transparent border-b border-[#E8E5DD] px-0 py-3 text-[#1A1A1A] font-serif text-lg focus:outline-none"
                                   autoComplete="off"
                                 />
                               </div>
                               <div className="space-y-2">
                                 <label
                                   htmlFor="byok-api-token"
-                                  className="block text-xs font-sans uppercase tracking-[0.2em] text-cool-grey"
+                                  className="block text-xs font-sans uppercase tracking-[0.2em] text-[#6B6B6B]"
                                 >
                                   API Token
                                 </label>
@@ -437,7 +437,7 @@ export function ParameterCollection({
                                       e.target.value,
                                     )
                                   }
-                                  className="w-full bg-transparent border-b border-ube/30 px-0 py-3 text-cadet-grey font-serif text-lg focus:outline-none"
+                                  className="w-full bg-transparent border-b border-[#E8E5DD] px-0 py-3 text-[#1A1A1A] font-serif text-lg focus:outline-none"
                                   autoComplete="off"
                                 />
                               </div>
@@ -446,7 +446,7 @@ export function ParameterCollection({
                             <div className="space-y-2">
                               <label
                                 htmlFor="byok-api-key"
-                                className="block text-xs font-sans uppercase tracking-[0.2em] text-cool-grey"
+                                className="block text-xs font-sans uppercase tracking-[0.2em] text-[#6B6B6B]"
                               >
                                 API Key
                               </label>
@@ -461,7 +461,7 @@ export function ParameterCollection({
                                     e.target.value,
                                   )
                                 }
-                                className="w-full bg-transparent border-b border-ube/30 px-0 py-3 text-cadet-grey font-serif text-lg focus:outline-none"
+                                className="w-full bg-transparent border-b border-[#E8E5DD] px-0 py-3 text-[#1A1A1A] font-serif text-lg focus:outline-none"
                                 autoComplete="off"
                               />
                             </div>
@@ -478,13 +478,13 @@ export function ParameterCollection({
                   disabled={!isByokValid}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className="w-full max-w-md mx-auto block bg-ube text-chinese-black font-semibold py-4 rounded-none transition-all hover:bg-ube/90 font-sans tracking-wide uppercase text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full max-w-md mx-auto block bg-[#D4A853] text-white font-medium py-4 rounded-none transition-all hover:bg-[#B8923D] font-sans tracking-wide uppercase text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Generate Research Brief
                 </motion.button>
 
                 {!isByokValid && (
-                  <p className="mt-4 text-sm text-cool-grey font-sans">
+                  <p className="mt-4 text-sm text-[#6B6B6B] font-sans">
                     Complete the selected provider credentials to continue.
                   </p>
                 )}
