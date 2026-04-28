@@ -31,6 +31,34 @@
   --cool-grey: #9A9A9A;
 }
 
+/* Dark Mode */
+.dark {
+  /* Primary - Deep Warm Black */
+  --background: #1A1815;      /* Deep warm black */
+  --background-alt: #252220;   /* Slightly lighter */
+  --text-primary: #E8E5DD;   /* Soft cream */
+  --text-secondary: #A8A5A0; /* Warm gray */
+  --text-muted: #6B6865;    /* Muted gray */
+  
+  /* Accent - Muted Amber */
+  --accent: #C49A4A;         /* Muted amber */
+  --accent-hover: #D4A853;   /* Slightly brighter */
+  --link: #5BA3AD;          /* Muted teal */
+  
+  /* UI Elements */
+  --border: #3A3735;        /* Dark warm gray */
+  --divider: #2A2725;       /* Subtle dark */
+  --input-bg: #252220;
+  --card-bg: #252220;
+  
+  /* Legacy aliases */
+  --chinese-black: #E8E5DD;
+  --cadet-grey: #A8A5A0;
+  --american-blue: #5BA3AD;
+  --ube: #C49A4A;
+  --cool-grey: #6B6865;
+}
+
 /* ============================================
    TAILWIND THEME INTEGRATION
    ============================================ */
