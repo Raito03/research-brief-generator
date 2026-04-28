@@ -15,4 +15,4 @@ frontend/tsconfig.tsbuildinfo
 pip-resolution-no-ddgs-report.json
 mempalace.yaml
 opencode.json
-entities.json
+.worktrees/

@@ -117,16 +117,17 @@ export function ParameterCollection({
   ];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8 gap-8">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-8 gap-10">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center mb-6"
       >
-        <h1 className="text-5xl md:text-6xl font-bold text-[#1A1A1A] mb-4 font-serif tracking-tight">
+        <h1 className="text-4xl md:text-5xl font-normal text-[#1A1A1A] mb-3 font-serif tracking-wide">
           Research Assistant
         </h1>
-        <p className="text-[#6B6B6B] text-lg font-sans">
+        <div className="w-16 h-px bg-[#D4A853] mx-auto mb-4" />
+        <p className="text-[#6B6B6B] text-base font-sans font-light">
           Deep content extraction and editorial synthesis.
         </p>
       </motion.div>
@@ -140,29 +141,29 @@ export function ParameterCollection({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
-              className="space-y-6"
+              className="space-y-8"
             >
-              <h2 className="text-2xl font-medium text-[#1A1A1A] text-center mb-6 font-serif">
+              <h2 className="text-xl font-medium text-[#1A1A1A] text-center font-serif">
                 What would you like to research?
               </h2>
 
-              <div className="gap-4">
+              <div className="py-4">
                 <input
                   type="text"
                   value={topicInput}
                   onChange={(e) => setTopicInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleTopicSubmit()}
                   placeholder="e.g., Artificial Intelligence"
-                  className="focus:outline-none focus:ring-0 focus:border-transparent focus:ring-0 w-full bg-transparent border-b-2 border-[#E8E5DD] px-2 py-4 text-[#1A1A1A] placeholder-[#9A9A9A]/50 transition-all text-center text-2xl font-serif"
+                  className="focus:outline-none focus:ring-0 focus:border-transparent focus:ring-0 w-full bg-transparent border-b-2 border-[#E8E5DD] px-2 py-5 text-[#1A1A1A] placeholder-[#9A9A9A]/50 transition-all text-center text-xl font-serif"
                   autoFocus
                 />
 
-                <p className="text-sm text-[#9A9A9A] text-center mt-4 font-sans">
+                <p className="text-sm text-[#9A9A9A] text-center mt-3 font-sans">
                   {topicInput.length}/200 characters (min 5)
                 </p>
               </div>
 
-              <div className="flex justify-center pt-8">
+              <div className="flex justify-center pt-2">
                 <motion.button
                   type="button"
                   onClick={handleTopicSubmit}
@@ -194,12 +195,12 @@ export function ParameterCollection({
                 ← Back
               </button>
 
-              <div className="text-center">
-                <h2 className="text-[#1A1A1A] text-2xl mb-8 font-serif">
+              <div className="text-center py-6">
+                <h2 className="text-xl text-[#1A1A1A] font-serif">
                   How deep should the research be?
                 </h2>
 
-                <div className="grid gap-4">
+                <div className="grid gap-3 mt-6">
                   {depthOptions.map((option) => (
                     <motion.button
                       type="button"
@@ -207,15 +208,15 @@ export function ParameterCollection({
                       onClick={() => handleDepthSelect(option.value)}
                       whileHover={{ x: 4 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`w-full text-left px-6 py-4 transition-all border-l-4 ${
+                      className={`w-full text-left px-5 py-3 transition-all border-l-4 ${
                         formData.depth === option.value
                           ? "border-[#D4A853] bg-[#D4A853]/5"
                           : "border-transparent hover:border-[#D4A853]/40 hover:bg-[#D4A853]/5"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 space-y-1 pr-2">
-                          <div className="font-medium text-[#1A1A1A] text-xl font-serif">
+                        <div className="min-w-0 pr-2">
+                          <div className="font-medium text-[#1A1A1A] text-lg font-serif">
                             {option.label}
                           </div>
                           <div className="text-[#6B6B6B]/80 text-sm font-sans">
@@ -250,12 +251,12 @@ export function ParameterCollection({
                 ← Back
               </button>
 
-              <div className="text-center">
-                <h2 className="text-[#1A1A1A] text-2xl mb-8 font-serif">
+              <div className="text-center py-6">
+                <h2 className="text-xl text-[#1A1A1A] font-serif">
                   Preferred summary length?
                 </h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
                   {lengthOptions.map((option) => (
                     <motion.button
                       type="button"
@@ -263,16 +264,16 @@ export function ParameterCollection({
                       onClick={() => handleLengthSelect(option.value)}
                       whileHover={{ y: -2 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`p-6 text-left transition-all border-l-4 ${
+                      className={`p-4 text-left transition-all border-l-4 ${
                         formData.summaryLength === option.value
                           ? "border-[#D4A853] bg-[#D4A853]/5"
                           : "border-transparent hover:border-[#D4A853]/40 hover:bg-[#D4A853]/5"
                       }`}
                     >
-                      <div className="text-[#1A1A1A] font-medium mb-2 text-xl font-serif">
+                      <div className="text-[#1A1A1A] font-medium text-lg font-serif">
                         {option.label}
                       </div>
-                      <div className="text-[#6B6B6B] text-sm font-sans">
+                      <div className="text-[#6B6B6B] text-sm font-sans mt-1">
                         {option.desc}
                       </div>
                     </motion.button>
@@ -289,33 +290,33 @@ export function ParameterCollection({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
-              className="space-y-6"
+              className="space-y-8"
             >
               <button
                 type="button"
                 onClick={handleBack}
-                className="text-[#2D7D8A] hover:text-[#2D7D8A]/80 transition-colors text-sm font-medium font-sans uppercase tracking-wider mb-4"
+                className="text-[#2D7D8A] hover:text-[#2D7D8A]/80 transition-colors text-sm font-medium font-sans uppercase tracking-wider"
               >
                 ← Back
               </button>
 
-              <div className="text-center">
-                <h2 className="text-[#1A1A1A] text-2xl mb-8 font-serif">
+              <div className="text-center py-6">
+                <h2 className="text-xl text-[#1A1A1A] font-serif">
                   Ready to generate your research brief
                 </h2>
 
-                <div className="space-y-4 mb-6 text-left max-w-md mx-auto">
-                  <div className="flex justify-between items-center py-4 border-b border-[#E8E5DD]">
+                <div className="space-y-2 mt-6 text-left max-w-sm mx-auto">
+                  <div className="flex justify-between items-center py-3 border-b border-[#E8E5DD]">
                     <span className="text-[#6B6B6B] font-sans">Topic</span>
-                    <span className="text-[#1A1A1A] font-medium font-serif text-lg">
+                    <span className="text-[#1A1A1A] font-medium font-serif">
                       {formData.topic}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center py-4 border-b border-[#E8E5DD]">
+                  <div className="flex justify-between items-center py-3 border-b border-[#E8E5DD]">
                     <span className="text-[#6B6B6B] font-sans">
                       Research Depth
                     </span>
-                    <span className="text-[#1A1A1A] font-medium font-serif text-lg">
+                    <span className="text-[#1A1A1A] font-medium font-serif">
                       Level {formData.depth}
                     </span>
                   </div>
