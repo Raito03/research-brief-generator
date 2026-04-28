@@ -179,14 +179,15 @@ export function ChatInterface() {
               animate={{ opacity: 1, y: 0 }}
               className="text-center"
             >
-              <div className="bg-american-blue/20 border border-ube/30 rounded-2xl p-8">
-                <h2 className="text-2xl font-semibold text-ube mb-4">
+              <div className="bg-[#FAF8F5] border border-[#E8E5DD] rounded-2xl p-8">
+                <h2 className="text-2xl font-serif font-medium text-[#1A1A1A] mb-4">
                   Something went wrong
                 </h2>
-                <p className="text-cadet-grey mb-6">{error}</p>
+                <p className="text-[#6B6B6B] mb-6">{error}</p>
                 <button
+                  type="button"
                   onClick={handleReset}
-                  className="px-6 py-3 bg-ube text-chinese-black rounded-xl font-medium hover:bg-ube/90 transition-colors"
+                  className="px-6 py-3 bg-[#D4A853] text-white rounded-lg font-medium hover:bg-[#B8923D] transition-colors"
                 >
                   Try Again
                 </button>
