@@ -17,10 +17,10 @@ export function LoadingDisplay({ logs }: Props) {
           animate={{ opacity: 1, y: 0 }}
           className="space-y-4"
         >
-          <h2 className="text-3xl md:text-4xl font-bold text-cadet-grey font-serif tracking-tight">
+          <h2 className="text-3xl md:text-4xl font-medium text-[#1A1A1A] font-serif tracking-tight">
             Synthesizing Research
           </h2>
-          <p className="text-cool-grey font-sans text-lg">
+          <p className="text-[#6B6B6B] font-sans text-lg">
             Extracting and analyzing sources
           </p>
         </motion.div>
@@ -33,7 +33,7 @@ export function LoadingDisplay({ logs }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="text-ube font-serif text-xl md:text-2xl italic"
+              className="text-[#2D7D8A] font-serif text-xl md:text-2xl italic"
             >
               {latestLog}
             </motion.div>
@@ -41,7 +41,7 @@ export function LoadingDisplay({ logs }: Props) {
         </div>
         
         <motion.div 
-          className="w-full max-w-xs mx-auto h-px bg-gradient-to-r from-transparent via-ube/30 to-transparent"
+          className="w-full max-w-xs mx-auto h-px bg-gradient-to-r from-transparent via-[#D4A853]/30 to-transparent"
           animate={{ opacity: [0.3, 0.7, 0.3] }}
           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
         />
