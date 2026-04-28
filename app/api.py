@@ -185,10 +185,10 @@ async def generate_brief(request: Request, brief_request: BriefRequest):
 
     print(f"🎯 API: Starting brief generation for topic: '{brief_request.topic}'")
     print(f"📊 Request ID: {brief_id}")
-    print(f"👤 User: {request.user_id}")
+    print(f"👤 User: {brief_request.user_id}")
     summary_length = getattr(request, "summary_length", 300)
     print(f"📏 Summary Length: {summary_length} words")
-    print(f"🔍 Depth: {request.depth}/5")
+    print(f"🔍 Depth: {brief_request.depth}/5")
 
     try:
         # WHY: Create workflow instance for this specific request
@@ -199,10 +199,10 @@ async def generate_brief(request: Request, brief_request: BriefRequest):
         # WHAT: Like giving the chef the order details and ingredients
         initial_state = {
             "topic": brief_request.topic,
-            "depth": request.depth,
-            "user_id": request.user_id,
-            "follow_up": request.follow_up,
-            "summary_length": request.summary_length,
+            "depth": brief_request.depth,
+            "user_id": brief_request.user_id,
+            "follow_up": brief_request.follow_up,
+            "summary_length": brief_request.summary_length,
             "research_plan": None,
             "raw_search_results": None,
             "source_summaries": None,
@@ -226,7 +226,7 @@ async def generate_brief(request: Request, brief_request: BriefRequest):
         # WHAT: This runs your entire LangGraph pipeline (search, summarize, synthesize)
         # HOW: The workflow processes through all nodes until completion
         final_state = await run_workflow_async(
-            workflow_app, initial_state, byok=request.byok
+            workflow_app, initial_state, byok=brief_request.byok
         )
 
         # WHY: Calculate processing time for performance monitoring
@@ -351,10 +351,10 @@ async def generate_brief_stream(request: Request, brief_request: BriefRequest):
             # Send initial configuration logs
             yield f"data: {json.dumps({'type': 'log', 'message': f'🚀 Starting research brief generation...'}, cls=DateTimeEncoder)}\n\n"
             yield f"data: {json.dumps({'type': 'log', 'message': f'🎯 Topic: {brief_request.topic}'}, cls=DateTimeEncoder)}\n\n"
-            yield f"data: {json.dumps({'type': 'log', 'message': f'📏 Summary Length: {request.summary_length} words'}, cls=DateTimeEncoder)}\n\n"
-            yield f"data: {json.dumps({'type': 'log', 'message': f'🔍 Depth: {request.depth}/5'}, cls=DateTimeEncoder)}\n\n"
-            yield f"data: {json.dumps({'type': 'log', 'message': f'👤 User: {request.user_id}'}, cls=DateTimeEncoder)}\n\n"
-            yield f"data: {json.dumps({'type': 'log', 'message': f'🔄 Follow-up: {request.follow_up}'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'📏 Summary Length: {brief_request.summary_length} words'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'🔍 Depth: {brief_request.depth}/5'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'👤 User: {brief_request.user_id}'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'🔄 Follow-up: {brief_request.follow_up}'}, cls=DateTimeEncoder)}\n\n"
 
             # Create workflow instance
             workflow_app = create_advanced_workflow()
@@ -362,10 +362,10 @@ async def generate_brief_stream(request: Request, brief_request: BriefRequest):
             # Prepare initial state
             initial_state = {
                 "topic": brief_request.topic,
-                "depth": request.depth,
-                "user_id": request.user_id,
-                "follow_up": request.follow_up,
-                "summary_length": request.summary_length,
+                "depth": brief_request.depth,
+                "user_id": brief_request.user_id,
+                "follow_up": brief_request.follow_up,
+                "summary_length": brief_request.summary_length,
                 "research_plan": None,
                 "raw_search_results": None,
                 "source_summaries": None,
@@ -387,7 +387,7 @@ async def generate_brief_stream(request: Request, brief_request: BriefRequest):
                 run_workflow_async(
                     workflow_app,
                     initial_state,
-                    byok=request.byok,
+                    byok=brief_request.byok,
                     log_callback=stream_callback,
                 )
             )
