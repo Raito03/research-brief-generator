@@ -4,8 +4,9 @@ import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
 import uvicorn
@@ -16,9 +17,19 @@ from fastapi.responses import StreamingResponse
 import asyncio
 import json
 
+# Rate limiting
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
+
 # Import your existing workflow
 from app.advanced_workflow import create_advanced_workflow
-from app.llm_providers import request_log_callback, reset_request_provider_config, set_request_provider_config
+from app.llm_providers import (
+    request_log_callback,
+    reset_request_provider_config,
+    set_request_provider_config,
+)
 from app.schemas import FinalBrief, BriefRequest
 
 # WHY: FastAPI() creates our web application instance
@@ -31,17 +42,55 @@ app = FastAPI(
     redoc_url="/redoc",  # WHY: Alternative documentation format
 )
 
+# Rate limiter setup
+limiter = Limiter(key_func=get_remote_address)
+
+# Add rate limiter to app
+app.state.limiter = limiter
+
 # WHY: CORS allows websites to call your API from browsers
 # WHAT: Without this, web apps can't use your API due to browser security
+# WHY: Configurable via API_CORS_ORIGINS env var (comma-separated) or default to Railway URL
+cors_origins = os.getenv(
+    "API_CORS_ORIGINS", "https://ai-research-assistant-production-1ef8.up.railway.app"
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "*"
-    ],  # WHY: "*" means any website can call your API (use specific domains in production)
+    allow_origins=cors_origins,  # Configurable via API_CORS_ORIGINS env var
     allow_credentials=True,  # WHY: Allows cookies/authentication
     allow_methods=["*"],  # WHY: Allows GET, POST, PUT, DELETE etc.
     allow_headers=["*"],  # WHY: Allows any HTTP headers
 )
+
+
+# Structured JSON logging
+import logging
+import logging.config
+
+LOGGING_CONFIG = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {
+            "format": "%(asctime)s %(name)s %(levelname)s %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+            "stream": "ext://sys.stdout",
+        }
+    },
+    "root": {
+        "level": "INFO",
+        "handlers": ["console"],
+    },
+}
+
+# Apply logging config
+logging.config.dictConfig(LOGGING_CONFIG)
+logger = logging.getLogger("api")
 
 
 class BriefResponse(BaseModel):
@@ -112,7 +161,8 @@ async def health_check():
 # WHY: POST endpoints are for creating/submitting new data (like filling out a form)
 # WHAT: This is the main endpoint where users request research briefs
 @app.post("/brief", response_model=BriefResponse)
-async def generate_brief(request: BriefRequest):
+@limiter.limit("10/minute")
+async def generate_brief(request: Request, brief_request: BriefRequest):
     """
     Generate a research brief - the main function of your API
 
@@ -121,12 +171,15 @@ async def generate_brief(request: BriefRequest):
     HOW: Uses your LangGraph workflow to process the request
     """
 
+    # Request ID for tracing
+    request_id = str(uuid.uuid4())[:8]
+
     # WHY: Generate unique ID for tracking this specific request
     # WHAT: Like giving each customer a receipt number
     brief_id = str(uuid.uuid4())
     start_time = time.time()
 
-    print(f"🎯 API: Starting brief generation for topic: '{request.topic}'")
+    print(f"🎯 API: Starting brief generation for topic: '{brief_request.topic}'")
     print(f"📊 Request ID: {brief_id}")
     print(f"👤 User: {request.user_id}")
     summary_length = getattr(request, "summary_length", 300)
@@ -141,7 +194,7 @@ async def generate_brief(request: BriefRequest):
         # WHY: Prepare initial state with user's request data
         # WHAT: Like giving the chef the order details and ingredients
         initial_state = {
-            "topic": request.topic,
+            "topic": brief_request.topic,
             "depth": request.depth,
             "user_id": request.user_id,
             "follow_up": request.follow_up,
@@ -160,7 +213,7 @@ async def generate_brief(request: BriefRequest):
         active_requests[brief_id] = {
             "status": "processing",
             "started_at": datetime.now(),
-            "topic": request.topic,
+            "topic": brief_request.topic,
         }
 
         print(f"🚀 Starting workflow execution...")
@@ -168,7 +221,9 @@ async def generate_brief(request: BriefRequest):
         # WHY: Execute the actual research workflow
         # WHAT: This runs your entire LangGraph pipeline (search, summarize, synthesize)
         # HOW: The workflow processes through all nodes until completion
-        final_state = await run_workflow_async(workflow_app, initial_state, byok=request.byok)
+        final_state = await run_workflow_async(
+            workflow_app, initial_state, byok=request.byok
+        )
 
         # WHY: Calculate processing time for performance monitoring
         # WHAT: Like timing how long it takes to prepare a dish
@@ -249,6 +304,7 @@ async def generate_brief(request: BriefRequest):
 async def run_workflow_async(workflow_app, initial_state, byok=None, log_callback=None):
     """Run workflow in async context with request-scoped logging and provider config."""
     try:
+
         def _run_with_context():
             log_token = None
             active_byok = byok if byok and byok.enabled else None
@@ -278,17 +334,19 @@ class DateTimeEncoder(json.JSONEncoder):
 
 # Add this new endpoint after your existing endpoints
 @app.post("/brief/stream")
-async def generate_brief_stream(request: BriefRequest):
+@limiter.limit("10/minute")
+async def generate_brief_stream(request: Request, brief_request: BriefRequest):
     """Generate a research brief with real-time streaming logs"""
 
-    brief_id = str(uuid.uuid4())
+    # Request ID for tracing
+    request_id = str(uuid.uuid4())[:8]
     start_time = time.time()
 
     async def log_generator():
         try:
             # Send initial configuration logs
             yield f"data: {json.dumps({'type': 'log', 'message': f'🚀 Starting research brief generation...'}, cls=DateTimeEncoder)}\n\n"
-            yield f"data: {json.dumps({'type': 'log', 'message': f'🎯 Topic: {request.topic}'}, cls=DateTimeEncoder)}\n\n"
+            yield f"data: {json.dumps({'type': 'log', 'message': f'🎯 Topic: {brief_request.topic}'}, cls=DateTimeEncoder)}\n\n"
             yield f"data: {json.dumps({'type': 'log', 'message': f'📏 Summary Length: {request.summary_length} words'}, cls=DateTimeEncoder)}\n\n"
             yield f"data: {json.dumps({'type': 'log', 'message': f'🔍 Depth: {request.depth}/5'}, cls=DateTimeEncoder)}\n\n"
             yield f"data: {json.dumps({'type': 'log', 'message': f'👤 User: {request.user_id}'}, cls=DateTimeEncoder)}\n\n"
@@ -299,7 +357,7 @@ async def generate_brief_stream(request: BriefRequest):
 
             # Prepare initial state
             initial_state = {
-                "topic": request.topic,
+                "topic": brief_request.topic,
                 "depth": request.depth,
                 "user_id": request.user_id,
                 "follow_up": request.follow_up,
@@ -323,7 +381,10 @@ async def generate_brief_stream(request: BriefRequest):
             # Start the workflow execution with request-scoped log and provider context
             workflow_task = asyncio.create_task(
                 run_workflow_async(
-                    workflow_app, initial_state, byok=request.byok, log_callback=stream_callback
+                    workflow_app,
+                    initial_state,
+                    byok=request.byok,
+                    log_callback=stream_callback,
                 )
             )
 
